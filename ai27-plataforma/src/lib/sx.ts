@@ -30,20 +30,29 @@ export function sx(css: string | undefined | null): CSSProperties {
     const key = prop.startsWith('--') ? prop : prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
     out[key] = val
   }
-  if (modo !== 'escritorio') adaptar(out, modo)
+  // Escape: "--sx-fijo:1" en el string deja las declaraciones tal cual en todos los modos
+  // (p. ej. una rejilla de 3 columnas pequeñas que sí cabe en celular, o un min-width de scroll deliberado).
+  const fijo = '--sx-fijo' in out
+  if (fijo) delete out['--sx-fijo']
+  if (modo !== 'escritorio' && !fijo) adaptar(out, modo)
   cache.set(css, out as CSSProperties)
   return out as CSSProperties
 }
 
 /* ───────────── Reglas responsive ───────────── */
 
-// repeat(N, 1fr) · repeat(N, minmax(0,1fr)) · repeat(N, minmax(120px,1fr)) · "1fr 1fr" · "1fr 1fr 1fr"
-const RE_REPEAT = /^repeat\(\s*(\d+)\s*,\s*(?:1fr|minmax\(\s*(?:0|\d+px)\s*,\s*1fr\s*\))\s*\)$/
+// repeat(N, 1fr) · repeat(N, minmax(0,1fr)) · repeat(N, minmax(160px,1fr)) · "1fr 1fr" · "1fr 1fr 1fr"
+const RE_REPEAT = /^repeat\(\s*(\d+)\s*,\s*(?:1fr|minmax\(\s*(0|\d+)(?:px)?\s*,\s*1fr\s*\))\s*\)$/
 const RE_FRS = /^(?:(?:1fr|minmax\(\s*0\s*,\s*1fr\s*\))\s*){2,}$/
 
+/** Número de columnas iguales de una rejilla, o null si no aplica. Columnas con mínimo ≤120px ya caben en celular: no se tocan. */
 function columnasIguales(valor: string): number | null {
   const m = RE_REPEAT.exec(valor)
-  if (m) return Number(m[1])
+  if (m) {
+    const minimo = Number(m[2] ?? 0)
+    if (minimo > 0 && minimo <= 120) return null
+    return Number(m[1])
+  }
   if (RE_FRS.test(valor)) return valor.trim().split(/\s+/).length
   return null
 }

@@ -45,7 +45,7 @@ export function Shell({ active, css, children, mainStyle }: { active: NavId; css
   return (
     <div style={sx("font-family:'Montserrat',system-ui,sans-serif;color:#0D1D41;background:#F6F7F9;min-height:100vh;display:flex;flex-direction:column")}>
       {css && <style>{css}</style>}
-      <header style={sx('position:sticky;top:0;z-index:800;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#FFFFFF;border-bottom:1px solid #EEF1F4;box-sizing:border-box')}>
+      <header className="shell-top" style={sx('position:sticky;top:0;z-index:800;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#FFFFFF;border-bottom:1px solid #EEF1F4;box-sizing:border-box')}>
         <button type="button" onClick={() => setAbierto(true)} aria-label="Abrir menú" aria-expanded={abierto} aria-controls="menu-lateral"
           style={sx('width:40px;height:40px;border-radius:10px;border:1px solid #D5DBE3;background:#FFFFFF;color:#0D1D41;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none')}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
@@ -53,7 +53,7 @@ export function Shell({ active, css, children, mainStyle }: { active: NavId; css
         <Link to="/" aria-label="Inicio" style={sx('display:flex;align-items:center;text-decoration:none')}><Logo height={24} /></Link>
         <span style={sx('margin-left:auto;font-size:13px;font-weight:600;color:#3E4A59;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0')}>{etiquetaNav(active)}</span>
       </header>
-      <main style={sx(`flex:1;min-width:0;padding:${movil ? '16px 16px 40px' : '22px 24px 48px'};box-sizing:border-box;display:flex;flex-direction:column;gap:${movil ? 18 : 22}px`)}>
+      <main className="shell-main" style={sx(`flex:1;min-width:0;padding:${movil ? '16px 16px 40px' : '22px 24px 48px'};box-sizing:border-box;display:flex;flex-direction:column;gap:${movil ? 18 : 22}px`)}>
         {children}
       </main>
       {abierto && (
