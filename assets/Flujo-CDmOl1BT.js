@@ -1,4 +1,4 @@
-import{a as e,r as t,t as n}from"./jsx-runtime-DqzFiGwU.js";import{d as r,u as i}from"./index-BaGJAEWE.js";var a=n(),o=`
+import{o as e,r as t,t as n}from"./jsx-runtime-KerS_GNH.js";import{d as r,u as i}from"./index-BnKNSTHb.js";var a=n(),o=`
 a{color:#3448A8}a:hover{color:#0D1D41}
 .paso{display:flex;gap:16px;align-items:center;padding:18px 20px;background:#FFFFFF;border:1px solid #E4E8ED;border-radius:12px;min-height:88px;box-sizing:border-box}
 .paso .n{width:40px;height:40px;border-radius:50%;background:#475CC7;color:#FFFFFF;display:inline-flex;align-items:center;justify-content:center;font:600 16px 'Montserrat',sans-serif;flex:none}
