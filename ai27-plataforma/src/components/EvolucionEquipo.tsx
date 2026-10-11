@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { Nota, Section } from './Page'
 import { AREAS_DISENO, headcountMensual } from '../data/rh'
 
@@ -12,6 +13,8 @@ export function EvolucionEquipo() {
   const [area, setArea] = useState('Todas las áreas')
   const [meses, setMeses] = useState<6 | 12>(12)
   const [hover, setHover] = useState<number | null>(null)
+  // Celular: la gráfica (900 de ancho) se desplaza en horizontal en lugar de encogerse hasta que las etiquetas no se leen
+  const movil = useViewport() === 'movil'
   const datos = useMemo(() => headcountMensual(area, meses), [area, meses])
 
   const W = 900, H = 260, L = 44, R = 16, T = 18, B = 58
@@ -59,7 +62,9 @@ export function EvolucionEquipo() {
         <Nota>Desde {primero.etiqueta} hasta {ultimo.etiqueta}. Pasa el cursor sobre la gráfica para ver cada mes.</Nota>
       </div>
 
-      <div style={sx('position:relative;width:100%;overflow:hidden')} onMouseLeave={() => setHover(null)}>
+      {movil && <span style={sx('font-size:12px;color:#5F6B7A')}>Desliza la gráfica hacia la derecha para ver los meses recientes →</span>}
+      <div style={sx(movil ? 'overflow-x:auto;-webkit-overflow-scrolling:touch' : '')} onMouseLeave={() => setHover(null)}>
+      <div style={sx(movil ? 'position:relative;width:max(100%,640px)' : 'position:relative;width:100%;overflow:hidden')}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Headcount mensual de ${area}: de ${primero.headcount} en ${primero.etiqueta} a ${ultimo.headcount} en ${ultimo.etiqueta}`} style={sx('width:100%;height:auto;display:block')}>
           <defs><linearGradient id="hc-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#475CC7" stopOpacity="0.18" /><stop offset="100%" stopColor="#475CC7" stopOpacity="0" /></linearGradient></defs>
           {ticks.map(t => <g key={t}><line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#EEF1F4" /><text x={L - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="#5F6B7A" fontFamily="IBM Plex Mono, monospace">{t}</text></g>)}
@@ -85,6 +90,7 @@ export function EvolucionEquipo() {
             <span style={sx('color:#A7F0C5')}>+{h.altas} altas</span> · <span style={sx('color:#FFB4AE')}>−{h.bajas} bajas</span>{hover > 0 && <> · neto {h.headcount - datos[hover - 1].headcount >= 0 ? '+' : ''}{h.headcount - datos[hover - 1].headcount}</>}
           </div>
         )}
+      </div>
       </div>
     </Section>
   )

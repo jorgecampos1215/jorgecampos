@@ -3,6 +3,7 @@ import { Shell } from '../components/Shell'
 import { Field, Modal, btnPriStyle, btnStyle, inputStyle, useToast } from '../components/ui'
 import { Nota, PageHeader, Section } from '../components/Page'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { CLIENTES_FILTRO, ZONAS_FILTRO, desdeSeed } from '../data/reportes'
 
 const CSS = `
@@ -25,7 +26,9 @@ a{color:#3448A8}a:hover{color:#0D1D41}
 .chip{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border-radius:999px;border:1px solid #D5DBE3;background:#FFFFFF;color:#3E4A59;font:500 13px 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap}
 .chip:hover{border-color:#475CC7;color:#0D1D41}
 .chip[aria-current="true"]{background:#E9EDFB;border-color:#475CC7;color:#0D1D41}
-.ej{border:0;background:none;padding:0;cursor:pointer;font:400 13px 'Montserrat',sans-serif;color:#3448A8;text-decoration:underline;text-underline-offset:2px}
+.ej{border:0;background:none;padding:0;cursor:pointer;font:400 13px 'Montserrat',sans-serif;color:#3448A8;text-decoration:underline;text-underline-offset:2px;text-align:left}
+/* Celular: los envíos programados se muestran como tarjetas */
+.rep-tarjeta{display:flex;flex-direction:column;gap:6px;border:1px solid #E4E8ED;border-radius:8px;padding:10px 12px;font-size:13px}
 @keyframes rep-pulse{0%,100%{opacity:.35}50%{opacity:1}}
 @media print{
   body *{visibility:hidden}
@@ -130,6 +133,8 @@ function downloadCSV(filename: string, rows: (string | number)[][]) {
 const slug = (s: string) => norm(s).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
 
 export default function Reportes() {
+  // Celular: barras del reporte apiladas (etiqueta y valor arriba, barra abajo), envíos programados como tarjetas y menos padding.
+  const movil = useViewport() === 'movil'
   const [r, setR] = useState('inc')
   const [generated, setGenerated] = useState<Rep[]>([])
   const [prompt, setPrompt] = useState('')
@@ -217,7 +222,7 @@ export default function Reportes() {
         descripcion={`Pide un reporte en tus palabras o elige uno de la biblioteca; lo ves aquí mismo y lo descargas en PDF o Excel. ${R.length + generated.length} reportes listos · ${activos} envíos programados.`}
         accion={{ label: 'Generar con IA', onClick: () => { if (prompt.trim()) generar(); else inputRef.current?.focus() } }} />
 
-      <section aria-label="Pide un reporte en tus palabras" style={sx('display:flex;flex-direction:column;gap:10px;background:#F0F3FD;border:1px solid #C7D0F2;border-radius:12px;padding:18px 24px')}>
+      <section aria-label="Pide un reporte en tus palabras" style={sx('display:flex;flex-direction:column;gap:10px;background:#F0F3FD;border:1px solid #C7D0F2;border-radius:12px;padding:' + (movil ? '16px' : '18px 24px'))}>
         <div style={sx('display:flex;gap:10px;align-items:center')}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3448A8" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true" style={sx('flex:none')}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg>
           <h2 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:19px;font-weight:600;color:#0D1D41")}>Pide un reporte en tus palabras</h2>
@@ -246,7 +251,7 @@ export default function Reportes() {
         </div>
       </Section>
 
-      <section id="rep-preview" className="card" aria-label="Vista previa" style={sx('display:flex;flex-direction:column;gap:18px;padding:24px;position:relative')}>
+      <section id="rep-preview" className="card" aria-label="Vista previa" style={sx('display:flex;flex-direction:column;gap:18px;padding:' + (movil ? '16px' : '24px') + ';position:relative')}>
         {loading && (
           <div aria-live="polite" style={sx('position:absolute;inset:0;background:rgba(255,255,255,.82);border-radius:10px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:14px;color:#0D1D41;z-index:1')}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3448A8" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true" style={sx('animation:rep-pulse 1s ease-in-out infinite')}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg>
@@ -279,10 +284,12 @@ export default function Reportes() {
           <figcaption className="lbl">{cur0.chart}</figcaption>
           {cur0.data.length === 0 && <span style={sx('font-size:14px;color:#5F6B7A')}>Sin datos para los filtros seleccionados. Prueba con otro cliente o zona.</span>}
           {cur0.data.map(([k, v], i) => (
-            <div key={k} style={sx('display:grid;grid-template-columns:180px minmax(0,1fr) 90px;gap:12px;align-items:center;font-size:14px')}>
+            // Celular: etiqueta y valor en la primera fila, barra a todo lo ancho debajo (en escritorio "180px 1fr 90px")
+            <div key={k} style={sx(movil ? 'display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;font-size:14px;--sx-fijo:1' : 'display:grid;grid-template-columns:180px minmax(0,1fr) 90px;gap:12px;align-items:center;font-size:14px')}>
               <span>{k}</span>
-              <div style={sx('height:16px;border-radius:4px;background:#EBEEF2;overflow:hidden')}><div style={sx('height:100%;width:' + Math.max(1, Math.round(v / max * 100)) + '%;background:' + (i === 0 ? '#3448A8' : '#475CC7'))}></div></div>
-              <span className="mono" style={sx('text-align:right')}>{fv(v)}</span>
+              {movil && <span className="mono" style={sx('text-align:right')}>{fv(v)}</span>}
+              <div style={sx('height:16px;border-radius:4px;background:#EBEEF2;overflow:hidden' + (movil ? ';grid-column:1 / -1;height:10px' : ''))}><div style={sx('height:100%;width:' + Math.max(1, Math.round(v / max * 100)) + '%;background:' + (i === 0 ? '#3448A8' : '#475CC7'))}></div></div>
+              {!movil && <span className="mono" style={sx('text-align:right')}>{fv(v)}</span>}
             </div>
           ))}
         </figure>
@@ -294,6 +301,23 @@ export default function Reportes() {
 
       <Section titulo="Envíos programados" ayuda={`${activos} activos. Reportes que se mandan solos por correo a quien corresponda; puedes pausarlos, enviarlos ahora o quitarlos.`} plegable abierto={false} style="padding:20px 8px 8px"
         acciones={<button type="button" className="btn btn-sm" onClick={abrirProgramar}>Programar “{cur0.name.length > 28 ? cur0.name.slice(0, 26) + '…' : cur0.name}”</button>}>
+        {movil ? (
+          // Celular: una tarjeta por envío con los mismos datos y acciones que la fila
+          <div style={sx('display:flex;flex-direction:column;gap:8px;padding:0 6px')}>
+            {sched.map((s, i) => (
+              <article key={s.r} className="rep-tarjeta" aria-label={`Envío programado: ${s.r}`}>
+                <div style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start')}>
+                  <button type="button" onClick={() => abrirReporte(s.r)} style={sx("background:none;border:0;padding:0;cursor:pointer;color:#0D1D41;font:600 14px 'Montserrat',sans-serif;text-align:left;min-height:0")} title="Abrir reporte">{s.r}</button>
+                  <button type="button" title={s.st === 'Activo' ? 'Pausar envío' : 'Reactivar envío'} onClick={() => toggle(i)} className={'pill pill-btn ' + (s.st === 'Activo' ? 'p-ok' : 'p-mute')} style={sx('flex:none;min-height:0')}>{s.st}</button>
+                </div>
+                <span style={sx('color:#5F6B7A')}>{s.to} · {s.f} · {s.fmt}</span>
+                <span>Próximo envío: <span className="mono">{s.n}</span></span>
+                <div style={sx('display:flex;gap:6px;flex-wrap:wrap')}><button type="button" className="btn btn-sm" onClick={() => enviarAhora(s)}>Enviar ahora</button><button type="button" className="btn btn-sm" aria-label="Eliminar envío" title="Quitar envío programado" onClick={() => quitar(i)}>×</button></div>
+              </article>
+            ))}
+            {sched.length === 0 && <span style={sx('color:#5F6B7A;font-size:14px')}>Sin envíos programados. Usa “Programar envío” para que un reporte llegue solo por correo.</span>}
+          </div>
+        ) : (
         <div style={sx('overflow-x:auto')}>
           <table className="tbl">
             <thead><tr><th>Reporte</th><th>Destinatarios</th><th>Frecuencia</th><th>Próximo envío</th><th>Formato</th><th>Estatus</th><th></th></tr></thead>
@@ -306,6 +330,7 @@ export default function Reportes() {
             </tbody>
           </table>
         </div>
+        )}
         <Nota>Haz clic en el estatus para pausar o reactivar un envío.</Nota>
       </Section>
 

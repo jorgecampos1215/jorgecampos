@@ -43,7 +43,7 @@ export function Shell({ active, css, children, mainStyle }: { active: NavId; css
 
   const movil = modo === 'movil'
   return (
-    <div style={sx("font-family:'Montserrat',system-ui,sans-serif;color:#0D1D41;background:#F6F7F9;min-height:100vh;display:flex;flex-direction:column")}>
+    <div style={sx("--shell-top:61px;font-family:'Montserrat',system-ui,sans-serif;color:#0D1D41;background:#F6F7F9;min-height:100vh;display:flex;flex-direction:column")}>
       {css && <style>{css}</style>}
       <header className="shell-top" style={sx('position:sticky;top:0;z-index:800;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#FFFFFF;border-bottom:1px solid #EEF1F4;box-sizing:border-box')}>
         <button type="button" onClick={() => setAbierto(true)} aria-label="Abrir menú" aria-expanded={abierto} aria-controls="menu-lateral"

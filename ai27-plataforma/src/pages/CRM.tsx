@@ -6,6 +6,7 @@ import { Nota, PageHeader, Section } from '../components/Page'
 import { ROUTES } from '../lib/routes'
 import { actions, useStore, type AsignacionNueva } from '../lib/store'
 import { sx, fmtMXN } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { AUTOPARTES, clientesCRM, fmtM, incidentesDe, serviciosDe, todosLosClientes, type ClienteCRM } from '../data/crm'
 import { asignacionesDeCliente, HOY_DEMO, type Asignacion } from '../data/asignaciones'
 import { custodios as seedCustodios, unidades as seedUnidades, type TipoServicio } from '../data/seed'
@@ -34,6 +35,9 @@ button.pill{border:0;cursor:pointer;font-family:'Montserrat',sans-serif}
 .chk:hover{background:#F3F5F8}.chk[data-on="true"]{background:#E9EDFB;border-color:#C7D0F2}
 .chk input{width:16px;height:16px;margin:0;min-height:0;accent-color:#475CC7}
 .lista{display:flex;flex-direction:column;gap:2px;max-height:200px;overflow:auto;border:1px solid #E4E8ED;border-radius:8px;padding:4px}
+/* Celular: las tablas de asignaciones y de clientes se muestran como tarjetas */
+.crm-tarjeta{display:flex;flex-direction:column;gap:6px;width:100%;box-sizing:border-box;text-align:left;background:#FFFFFF;border:1px solid #E4E8ED;border-radius:8px;padding:10px 12px;font:400 14px 'Montserrat',sans-serif;color:#0D1D41}
+button.crm-tarjeta{cursor:pointer}button.crm-tarjeta[aria-pressed="true"]{background:#F0F3FD;border-color:#C7D0F2}
 `
 
 /** Clientes de la lista lateral del diseño (en ese orden). */
@@ -41,6 +45,8 @@ const LATERAL = ['Alpura', 'Marsh', 'Farmacéutica Orión', 'Autopartes Saltillo
 
 type Actividad = { cliente: string; tipo: string; nota: string; fecha: string }
 type SortKey = 'nombre' | 'modelo' | 'activos' | 'trimestre' | 'margen' | 'diasCobro' | 'ultimo'
+/** Opciones del selector "Ordenar por" que sustituye a los encabezados de la tabla en celular. */
+const ORDEN: [SortKey, string][] = [['trimestre', 'Facturado trimestre'], ['nombre', 'Cliente'], ['modelo', 'Tipo de servicio'], ['activos', 'Servicios activos'], ['margen', 'Margen'], ['diasCobro', 'Cobranza'], ['ultimo', 'Último servicio']]
 /** Fila de la tabla de asignaciones: las derivadas de seed y las creadas por el usuario comparten los campos esenciales. */
 type FilaAsg = Asignacion | AsignacionNueva
 
@@ -75,6 +81,8 @@ const formVacio = (ruta = '') => {
 
 export default function CRM() {
   const toast = useToast()
+  // Celular: las tablas de asignaciones y de "Todos los clientes" se muestran como tarjetas (misma información, sin scroll horizontal).
+  const movil = useViewport() === 'movil'
   const nuevos = useStore(s => s.clientesNuevos ?? [])
   const asgStore = useStore(s => s.asignaciones ?? [])
   const overrides = useStore(s => s.estatusUnidades ?? [])
@@ -212,6 +220,29 @@ export default function CRM() {
   const portalCount = tabla.filter(c => c.portal).length
   const vencidosCount = tabla.filter(c => c.cobranza !== 'Al corriente').length
 
+  // Contenido de las celdas de asignaciones (lo comparten la tabla de escritorio y las tarjetas de celular)
+  const celCustodios = (a: FilaAsg) => (<>
+    {a.custodios.length === 0 && <span style={sx('color:#5F6B7A')}>Sin custodio (monitoreo)</span>}
+    {a.custodios.map(id => <div key={id}><Link to={ROUTES.Custodios} style={sx('text-decoration:none;color:#0D1D41;font-weight:500')}>{nombreCustodio(id)}</Link> <span className="mono" style={sx('font-size:12px;color:#5F6B7A')}>{id}</span></div>)}
+  </>)
+  const celUnidades = (a: FilaAsg) => (<>
+    {a.unidades.length === 0 && <span style={sx('color:#5F6B7A')}>—</span>}
+    {a.unidades.map(id => { const u = unidadDe(id); return <div key={id}><Link to={ROUTES.Flotilla} className="mono" style={sx('text-decoration:none;color:#0D1D41;font-size:13px')}>{id}</Link> <span style={sx('font-size:12px;color:#5F6B7A')}>{u ? `${u.vehiculo} · ${u.placas}` : ''}</span></div> })}
+  </>)
+  const pillsAsg = (a: FilaAsg) => (
+    <div style={sx('display:flex;gap:6px;flex-wrap:wrap;align-items:center')}>
+      <span className={pillEstatus(a.estatus)}>{a.estatus}</span>
+      {'resultado' in a && a.resultado && a.resultado !== 'Sin novedad' && <span className={'pill ' + (a.resultado === 'Con incidente' ? 'p-bad' : 'p-warn')}>{a.resultado}</span>}
+    </div>
+  )
+  const accionesAsg = (a: FilaAsg, propia: boolean) => propia && a.estatus !== 'Terminada' && a.estatus !== 'Cancelada' && (
+    <div style={sx('display:flex;gap:6px;flex-wrap:wrap;margin-top:6px')}>
+      {a.estatus === 'Programada' && <button type="button" className="btn btn-sm" style={sx('min-height:28px;padding:0 8px')} onClick={() => { actions.cambiarEstatusAsignacion(a.id, 'En curso'); toast(`Asignación ${a.id} en curso`) }}>Iniciar</button>}
+      {a.estatus === 'En curso' && <button type="button" className="btn btn-sm" style={sx('min-height:28px;padding:0 8px')} onClick={() => { actions.cambiarEstatusAsignacion(a.id, 'Terminada'); toast(`Asignación ${a.id} terminada`) }}>Terminar</button>}
+      {a.estatus === 'Programada' && <button type="button" className="btn btn-sm" style={sx('min-height:28px;padding:0 8px')} onClick={() => { actions.cambiarEstatusAsignacion(a.id, 'Cancelada'); toast(`Asignación ${a.id} cancelada`, 'info') }}>Cancelar</button>}
+    </div>
+  )
+
   return (
     <Shell active="crm" css={CSS}>
       <PageHeader seccion="Comercial" titulo="Clientes"
@@ -270,6 +301,27 @@ export default function CRM() {
 
           <Section titulo="Custodios y unidades asignados" ayuda={`${custodiosActivos} custodio${custodiosActivos === 1 ? '' : 's'} y ${unidadesActivas} unidad${unidadesActivas === 1 ? '' : 'es'} en curso o programados para ${sel.nombre}. Cada asignación tiene un rango de fecha y hora.`}
             acciones={<button type="button" className="btn btn-sm" onClick={abrirAsignar}>Asignar custodios y unidades</button>} style="padding:20px 8px 12px">
+            {movil ? (
+              // Celular: una tarjeta por asignación con los mismos datos que la tabla
+              <div style={sx('display:flex;flex-direction:column;gap:10px;padding:0 6px')}>
+                {asgVista.map(a => (
+                  <article key={a.id} className="crm-tarjeta" aria-label={`Asignación ${a.servicio}`} style={sx('font-size:13px')}>
+                    <div style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start')}>
+                      <span style={sx('min-width:0')}><span className="mono" style={sx('font-size:13px;color:#3E4A59')}>{a.servicio}</span><div style={sx('font-size:12px;color:#5F6B7A')}>{a.tipo} · {a.ruta}</div></span>
+                      <span className="mono" style={sx('flex:none;font-size:13px')}>{a.horas ? `${a.horas} h` : '—'}</span>
+                    </div>
+                    <div style={sx('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;--sx-fijo:1')}>
+                      <div><span className="lbl" style={sx('display:block;margin-bottom:2px')}>Custodio(s)</span>{celCustodios(a)}</div>
+                      <div><span className="lbl" style={sx('display:block;margin-bottom:2px')}>Unidad(es)</span>{celUnidades(a)}</div>
+                    </div>
+                    <div className="mono" style={sx('font-size:13px;overflow-wrap:anywhere')}>{fmtFH(a.inicio)} <span style={sx('color:#5F6B7A')}>→ {fmtFH(a.fin)}</span></div>
+                    {pillsAsg(a)}
+                    {accionesAsg(a, asgStore.some(s => s.id === a.id))}
+                  </article>
+                ))}
+                {asgSel.length === 0 && <span style={sx('padding:12px 6px;color:#5F6B7A;text-align:center;font-size:14px')}>Este cliente aún no tiene custodios ni unidades asignados. Usa “Asignar custodios y unidades”.</span>}
+              </div>
+            ) : (
             <div style={sx('overflow-x:auto')}>
               <table style={sx('width:100%;border-collapse:collapse;font-size:14px')}>
                 <thead><tr>
@@ -285,29 +337,14 @@ export default function CRM() {
                     const propia = asgStore.some(s => s.id === a.id)
                     return (
                       <tr key={a.id}>
-                        <td style={sx(tdA + ';min-width:130px')}>
-                          {a.custodios.length === 0 && <span style={sx('color:#5F6B7A')}>Sin custodio (monitoreo)</span>}
-                          {a.custodios.map(id => <div key={id}><Link to={ROUTES.Custodios} style={sx('text-decoration:none;color:#0D1D41;font-weight:500')}>{nombreCustodio(id)}</Link> <span className="mono" style={sx('font-size:12px;color:#5F6B7A')}>{id}</span></div>)}
-                        </td>
-                        <td style={sx(tdA + ';min-width:130px')}>
-                          {a.unidades.length === 0 && <span style={sx('color:#5F6B7A')}>—</span>}
-                          {a.unidades.map(id => { const u = unidadDe(id); return <div key={id}><Link to={ROUTES.Flotilla} className="mono" style={sx('text-decoration:none;color:#0D1D41;font-size:13px')}>{id}</Link> <span style={sx('font-size:12px;color:#5F6B7A')}>{u ? `${u.vehiculo} · ${u.placas}` : ''}</span></div> })}
-                        </td>
+                        <td style={sx(tdA + ';min-width:130px')}>{celCustodios(a)}</td>
+                        <td style={sx(tdA + ';min-width:130px')}>{celUnidades(a)}</td>
                         <td style={sx(tdA + ';min-width:120px')}><span className="mono" style={sx('font-size:13px;color:#3E4A59')}>{a.servicio}</span><div style={sx('font-size:12px;color:#5F6B7A')}>{a.tipo} · {a.ruta}</div></td>
                         <td style={sx(tdA + ';white-space:nowrap')}><span className="mono" style={sx('font-size:13px')}>{fmtFH(a.inicio)}</span><div className="mono" style={sx('font-size:13px;color:#5F6B7A')}>→ {fmtFH(a.fin)}</div></td>
                         <td className="mono" style={sx(tdA + ';text-align:right;white-space:nowrap')}>{a.horas ? `${a.horas} h` : '—'}</td>
                         <td style={sx(tdA + ';min-width:120px')}>
-                          <div style={sx('display:flex;gap:6px;flex-wrap:wrap;align-items:center')}>
-                            <span className={pillEstatus(a.estatus)}>{a.estatus}</span>
-                            {'resultado' in a && a.resultado && a.resultado !== 'Sin novedad' && <span className={'pill ' + (a.resultado === 'Con incidente' ? 'p-bad' : 'p-warn')}>{a.resultado}</span>}
-                          </div>
-                          {propia && a.estatus !== 'Terminada' && a.estatus !== 'Cancelada' && (
-                            <div style={sx('display:flex;gap:6px;flex-wrap:wrap;margin-top:6px')}>
-                              {a.estatus === 'Programada' && <button type="button" className="btn btn-sm" style={sx('min-height:28px;padding:0 8px')} onClick={() => { actions.cambiarEstatusAsignacion(a.id, 'En curso'); toast(`Asignación ${a.id} en curso`) }}>Iniciar</button>}
-                              {a.estatus === 'En curso' && <button type="button" className="btn btn-sm" style={sx('min-height:28px;padding:0 8px')} onClick={() => { actions.cambiarEstatusAsignacion(a.id, 'Terminada'); toast(`Asignación ${a.id} terminada`) }}>Terminar</button>}
-                              {a.estatus === 'Programada' && <button type="button" className="btn btn-sm" style={sx('min-height:28px;padding:0 8px')} onClick={() => { actions.cambiarEstatusAsignacion(a.id, 'Cancelada'); toast(`Asignación ${a.id} cancelada`, 'info') }}>Cancelar</button>}
-                            </div>
-                          )}
+                          {pillsAsg(a)}
+                          {accionesAsg(a, propia)}
                         </td>
                       </tr>
                     )
@@ -316,6 +353,7 @@ export default function CRM() {
                 </tbody>
               </table>
             </div>
+            )}
             <div style={sx('display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;padding:0 12px')}>
               <Nota>Una asignación une al cliente con uno o más custodios y una o más unidades por un tiempo (fecha y hora de inicio y fin). Haz clic en un custodio o unidad para ver su ficha.</Nota>
               {asgSel.length > 8 && <button type="button" className="btn btn-sm" onClick={() => setVerTodasAsg(v => !v)}>{verTodasAsg ? 'Ver menos' : `Ver las ${asgSel.length} asignaciones`}</button>}
@@ -355,10 +393,34 @@ export default function CRM() {
       </div>
 
       <Section titulo="Todos los clientes" ayuda={`Los ${tabla.length} clientes activos con su facturación, margen y cobranza. Haz clic en una fila para ver su ficha arriba.`} plegable abierto={false} style="padding:20px 8px 12px"
-        acciones={<><input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cliente…" aria-label="Buscar cliente" style={sx(inputStyle + ';width:180px;min-height:34px')} />
+        acciones={<><input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cliente…" aria-label="Buscar cliente" style={sx(inputStyle + (movil ? ';width:100%' : ';width:180px') + ';min-height:34px')} />
           <button type="button" aria-pressed={filtro === 'todos'} className="pill p-mute" style={sx(filtro === 'todos' ? PILL_ON : '')} onClick={() => setFiltro('todos')}>{tabla.length} activos</button>
           <button type="button" aria-pressed={filtro === 'portal'} className="pill p-mute" style={sx(filtro === 'portal' ? PILL_ON : '')} onClick={() => setFiltro(f => (f === 'portal' ? 'todos' : 'portal'))}>{portalCount} con portal en vivo</button>
-          <button type="button" aria-pressed={filtro === 'vencidos'} className="pill p-mute" style={sx(filtro === 'vencidos' ? PILL_ON : '')} onClick={() => setFiltro(f => (f === 'vencidos' ? 'todos' : 'vencidos'))}>{vencidosCount} con cobranza vencida</button></>}>
+          <button type="button" aria-pressed={filtro === 'vencidos'} className="pill p-mute" style={sx(filtro === 'vencidos' ? PILL_ON : '')} onClick={() => setFiltro(f => (f === 'vencidos' ? 'todos' : 'vencidos'))}>{vencidosCount} con cobranza vencida</button>
+          {movil && (
+            // Celular: sin encabezados de tabla, el orden se elige aquí
+            <div style={sx('display:flex;gap:6px;align-items:center;width:100%')}>
+              <select aria-label="Ordenar por" value={sort.k} onChange={e => { const k = e.target.value as SortKey; setSort({ k, d: k === 'nombre' || k === 'modelo' ? 1 : -1 }) }} style={sx(inputStyle + ';flex:1;min-height:34px')}>{ORDEN.map(([k, label]) => <option key={k} value={k}>Ordenar por {label.toLowerCase()}</option>)}</select>
+              <button type="button" className="btn btn-sm" aria-label={sort.d === 1 ? 'Orden ascendente; invertir' : 'Orden descendente; invertir'} onClick={() => setSort(s => ({ ...s, d: s.d === 1 ? -1 : 1 }))}>{sort.d === 1 ? '▲' : '▼'}</button>
+            </div>
+          )}</>}>
+        {movil ? (
+          // Celular: una tarjeta por cliente con los mismos datos que la fila
+          <div style={sx('display:flex;flex-direction:column;gap:8px;padding:0 6px')}>
+            {rows.slice(pg.from, pg.to).map(c => {
+              const cls = c.cobranza === 'Al corriente' ? 'pill p-ok' : (parseInt(c.cobranza) > 60 ? 'pill p-bad' : 'pill p-warn')
+              const bar = 'height:100%;width:' + Math.min(100, Math.round(c.margen / 45 * 100)) + '%;background:' + (c.margen < 28 ? '#3448A8' : '#2B9A66')
+              return (
+                <button key={c.nombre} type="button" className="crm-tarjeta" aria-pressed={desdeTabla && c.nombre === sel.nombre} onClick={() => { pick(c.nombre); setDesdeTabla(true) }} title="Ver ficha del cliente">
+                  <span style={sx('display:flex;justify-content:space-between;gap:8px;align-items:center')}><span style={sx('font-weight:500')}>{c.nombre}{c.nuevo ? <span className="pill p-info" style={sx('margin-left:8px')}>nuevo</span> : null}</span><span className="mono" style={sx('flex:none')}>{c.trimestre ? fmtM(c.trimestre) : '—'}</span></span>
+                  <span style={sx('font-size:12px;color:#5F6B7A')}>{c.modelo} · {c.activos} servicio{c.activos === 1 ? '' : 's'} activo{c.activos === 1 ? '' : 's'} · último servicio: {c.ultimo}</span>
+                  <span style={sx('display:flex;align-items:center;gap:8px')}><span style={sx('flex:1;height:8px;border-radius:4px;background:#EBEEF2;overflow:hidden;display:block')}><span style={sx(bar + ';display:block')}></span></span><span className="mono" style={sx('font-size:13px')}>{c.margen + '%'}</span><span className={cls}>{c.cobranza}</span></span>
+                </button>
+              )
+            })}
+            {rows.length === 0 && <span style={sx('padding:12px 6px;color:#5F6B7A;text-align:center;font-size:14px')}>Ningún cliente coincide con el filtro. Prueba con otro nombre o quita el filtro.</span>}
+          </div>
+        ) : (
         <div style={sx('overflow-x:auto')}>
           <table style={sx('width:100%;border-collapse:collapse;font-size:14px')}>
             <thead><tr>
@@ -390,6 +452,7 @@ export default function CRM() {
             </tbody>
           </table>
         </div>
+        )}
         <div style={sx('padding:0 12px')}><Pager {...pg} /></div>
       </Section>
 

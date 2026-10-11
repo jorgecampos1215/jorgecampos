@@ -27,11 +27,14 @@ html { -webkit-text-size-adjust: 100%; }
   .card h2 { font-size: 16px !important; } /* títulos de Section; los documentos (reporte, cotización) conservan el suyo */
   /* iOS hace zoom en campos con letra menor a 16px */
   input, select, textarea { font-size: 16px !important; }
-  .btn, button { min-height: 44px; }
+  /* Área táctil solo en botones de acción (.btn); los botones en línea, íconos y píldoras conservan su tamaño */
+  .btn { min-height: 44px; }
   .pill { white-space: normal; }
-  table { font-size: 13px; }
-  th, td { padding-left: 8px !important; padding-right: 8px !important; }
+  .card table { font-size: 13px; }
+  .card th, .card td { padding-left: 8px !important; padding-right: 8px !important; }
 }
+/* Cuerpo del Modal: columna flex con scroll; sus hijos no deben encogerse (una tabla con overflow-x colapsaría a 0) */
+.modal-body > * { flex-shrink: 0; }
 /* Al imprimir desde celular/tablet (reporte de incidente, cotización PDF) la barra superior y el padding del Shell sobran */
 @media print {
   .shell-top { display: none !important; }

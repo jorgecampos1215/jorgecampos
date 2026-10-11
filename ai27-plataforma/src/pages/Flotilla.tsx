@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Shell } from '../components/Shell'
 import { PageHeader, Section, Nota } from '../components/Page'
 import { Field, Modal, Pager, btnPriStyle, btnStyle, inputStyle, usePagination, useToast } from '../components/ui'
 import { ROUTES } from '../lib/routes'
 import { sx, fmtMXN } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { actions, useStore, type CargaNueva } from '../lib/store'
 import { asignaciones as SEED_ASG, asignacionesDeUnidad, consumoDiario, HOY_DEMO, type Asignacion } from '../data/asignaciones'
 import { CLIENTES, ZONAS, cargasCombustible as SEED_CARGAS, custodios, incidentes, ordenesTaller as SEED_OT, servicios, unidades, type CargaCombustible, type EstatusUnidad, type OrdenTaller, type TipoServicio, type Unidad, type Zona } from '../data/seed'
@@ -49,6 +50,14 @@ a{color:#3448A8}a:hover{color:#0D1D41}
 .chk input{accent-color:#475CC7}
 .selpill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px 4px 10px;border-radius:999px;background:#E9EDFB;color:#0D1D41;font-size:12px;font-weight:500}
 .selpill button{border:0;background:none;color:#3448A8;cursor:pointer;font-size:14px;line-height:1;padding:0}
+/* Celular: las tablas de unidades, taller y combustible se muestran como tarjetas */
+.fila-m{display:flex;flex-direction:column;gap:8px;width:100%;padding:12px 0;border-top:1px solid #EEF1F4;text-align:left;font:inherit;color:inherit;cursor:pointer;box-sizing:border-box}
+.fila-m:first-child{border-top:0;padding-top:4px}
+.fila-m.sel{background:#F0F3FD;margin:0 -8px;padding-left:8px;padding-right:8px;width:auto;border-radius:6px}
+.fila-m .dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;font-size:13px;margin:0}
+.fila-m .dl dt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5F6B7A;font-weight:500}
+.fila-m .dl dd{margin:2px 0 0;overflow-wrap:anywhere}
+.fila-m .dl .ancho{grid-column:1/-1}
 `
 
 const ST: Record<string, string> = { 'Operando': 'pill p-info', 'Disponible': 'pill p-ok', 'En taller': 'pill p-warn', 'Siniestrada': 'pill p-bad', 'Baja': 'pill p-mute', 'Abierta': 'pill p-warn', 'Cerrada': 'pill p-ok', 'En aseguradora': 'pill p-info', 'Normal': 'pill p-ok', 'Anómalo': 'pill p-bad', 'Programada': 'pill p-info', 'En curso': 'pill p-ok', 'Terminada': 'pill p-mute', 'Cancelada': 'pill p-bad' }
@@ -60,6 +69,22 @@ const TABS: [Tab, string, string][] = [
 ]
 type FTab = 'resumen' | 'asig' | 'comb' | 'taller'
 const FTABS: [FTab, string][] = [['resumen', 'Resumen'], ['asig', 'Asignaciones'], ['comb', 'Combustible y km'], ['taller', 'Taller']]
+/** Columnas ordenables de cada pestaña (las mismas que los encabezados de la tabla); en celular alimentan el selector "Ordenar por". */
+const COLS_TAB: Record<Tab, [string, string][]> = {
+  u: [['id', 'Unidad'], ['vehiculo', 'Vehículo'], ['estatus', 'Estatus'], ['asignada', 'Asignada a'], ['custodios', 'Custodio(s)'], ['rend', 'Rendimiento'], ['venc', 'Próximo vencimiento']],
+  t: [['id', 'Orden'], ['unidad', 'Unidad'], ['fecha', 'Fecha'], ['tipo', 'Tipo'], ['falla', 'Falla reportada'], ['proveedor', 'Proveedor'], ['costo', 'Costo'], ['diasFuera', 'Días fuera'], ['estatus', 'Estatus']],
+  c: [['fecha', 'Fecha'], ['unidad', 'Unidad'], ['origen', 'Origen'], ['litros', 'Litros'], ['costo', 'Costo'], ['kmGps', 'Km'], ['rendimiento', 'km/l'], ['consumo', 'Consumo']],
+}
+
+/** Tarjeta-fila para celular: equivale a una fila de la tabla (clic = abrir la ficha). Es un div con rol de botón porque puede contener botones (p. ej. "Cerrar orden"). */
+function FilaM({ onClick, sel, title, children }: { onClick: () => void; sel?: boolean; title?: string; children: ReactNode }) {
+  return (
+    <div role="button" tabIndex={0} className={'fila-m' + (sel ? ' sel' : '')} title={title} aria-pressed={sel} onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}>
+      {children}
+    </div>
+  )
+}
 type Venc = 'none' | 'poliza' | 'verif' | 'km' | 'anomalo'
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const fmtFecha = (iso: string) => `${iso.slice(8, 10)} ${MESES[parseInt(iso.slice(5, 7)) - 1]}`
@@ -132,6 +157,9 @@ function diario(u: Unidad, nuevas: CargaNueva[]) {
 
 export default function Flotilla() {
   const toast = useToast()
+  // Celular: tablas como tarjetas con selector de orden; la ficha lateral ocupa todo el ancho con menos margen interior
+  const modo = useViewport()
+  const movil = modo === 'movil'
   const asgNuevas = useStore(s => s.asignaciones ?? [])
   const ordenesNuevas = useStore(s => s.ordenesNuevas ?? [])
   const cargasNuevas = useStore(s => s.cargasNuevas ?? [])
@@ -313,7 +341,7 @@ export default function Flotilla() {
     toast(`Exportadas ${total} filas a CSV`)
   }
 
-  const selectSt = inputStyle + ';width:auto;min-height:36px'
+  const selectSt = inputStyle + ';width:auto;max-width:100%;min-height:36px'
   const KPI = ({ label, v, sub, onClick }: { label: string; v: string; sub: string; onClick: () => void }) => (
     <button type="button" className="card kpi" onClick={onClick} style={sx('display:flex;flex-direction:column;gap:4px;padding:14px 18px')}><span className="lbl">{label}</span><span className="k">{v}</span><span style={sx('font-size:13px;color:#5F6B7A')}>{sub}</span></button>
   )
@@ -339,8 +367,9 @@ export default function Flotilla() {
     const n = dias.length, bw = (W - padL) / n
     const y = (v: number) => padT + (H - padB - padT) * (1 - v / max)
     const yRef = y(esperado)
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Rendimiento diario en km por litro de los últimos ${n} días; línea de referencia en ${esperado} km/l`} style={sx('width:100%;height:auto;display:block')}>
+    // Celular: la gráfica (760 de ancho) se lee con scroll horizontal en vez de encogerse a la mitad
+    const svg = (
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Rendimiento diario en km por litro de los últimos ${n} días; línea de referencia en ${esperado} km/l`} style={sx((movil ? 'width:max(100%,640px)' : 'width:100%') + ';height:auto;display:block')}>
         {[0, 0.5, 1].map(t => <text key={t} x={padL - 6} y={y(max * t) + 4} textAnchor="end" fontSize="10" fill="#5F6B7A" fontFamily="IBM Plex Mono, monospace">{(max * t).toFixed(0)}</text>)}
         <line x1={padL} x2={W} y1={y(0)} y2={y(0)} stroke="#E4E8ED" />
         {dias.map((d, i) => {
@@ -353,7 +382,9 @@ export default function Flotilla() {
         {dias.map((d, i) => (i % 5 === 0 || i === n - 1) && <text key={'x' + d.fecha} x={padL + i * bw + bw / 2} y={H - 6} textAnchor="middle" fontSize="10" fill="#5F6B7A" fontFamily="Montserrat, sans-serif">{fmtFecha(d.fecha)}</text>)}
       </svg>
     )
+    return movil ? <div style={sx('overflow-x:auto;-webkit-overflow-scrolling:touch')}>{svg}</div> : svg
   }
+  const padFicha = movil ? 16 : 22 // margen interior del cajón de la ficha
 
   const custodiosDisponibles = useMemo(() => { const nqc = norm(fa.qCust.trim()); return custodios.filter(c => c.estatus === 'Disponible' && !fa.custodios.includes(c.id) && (!nqc || norm(c.id + ' ' + c.nombre + ' ' + c.zona + ' ' + c.base).includes(nqc))).slice(0, 8) }, [fa.qCust, fa.custodios])
   const unidadesCandidatas = useMemo(() => { const nqu = norm(fa.qUni.trim()); if (!nqu) return []; return filas.filter(f => (f.estatus === 'Disponible' || f.estatus === 'Operando') && !fa.unidades.includes(f.u.id) && norm(f.u.id + ' ' + f.u.vehiculo + ' ' + f.u.placas).includes(nqu)).slice(0, 6) }, [fa.qUni, fa.unidades, filas])
@@ -412,8 +443,65 @@ export default function Flotilla() {
               <button type="button" className="btn" style={sx('min-height:36px;padding:0 12px')} onClick={() => abrirCarga()}>Registrar carga</button>
             </>}
             <input type="search" aria-label="Buscar" placeholder={tab === 'u' ? 'Buscar unidad, placas, cliente, custodio' : tab === 't' ? 'Buscar orden, unidad, falla' : 'Buscar unidad'} value={q} onChange={e => { setQ(e.target.value); pg.setPage(0) }} style={sx(selectSt + ';min-width:220px')} />
+            {movil && (
+              <select aria-label="Ordenar por" value={sort ? `${sort.k}:${sort.dir}` : ''} onChange={e => { const [k, d] = e.target.value.split(':'); setSort(k ? { k, dir: d === '-1' ? -1 : 1 } : null); pg.setPage(0) }} style={sx(selectSt)}>
+                <option value="">Ordenar: sin orden</option>
+                {COLS_TAB[tab].flatMap(([k, label]) => [<option key={k + '1'} value={`${k}:1`}>{label} ▲</option>, <option key={k + '-1'} value={`${k}:-1`}>{label} ▼</option>])}
+              </select>
+            )}
             <button type="button" className="btn" style={sx('min-height:36px;padding:0 12px')} onClick={exportar}>Exportar CSV</button>
           </>}>
+          {movil && (
+            <div role="tabpanel" aria-label={tabInfo[1]} style={sx('display:flex;flex-direction:column')}>
+              {tab === 'u' && rowsU.slice(pg.from, pg.to).map(f => (
+                <FilaM key={f.u.id} sel={f.u.id === ficha} onClick={() => abrirFicha(f.u.id)} title="Abrir la ficha de la unidad">
+                  <span style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:nowrap')}>
+                    <span style={sx('display:flex;flex-direction:column;min-width:0')}><span className="mono" style={sx('font-weight:600')}>{f.u.id}</span><span style={sx('font-size:13px;color:#3E4A59')}>{f.u.vehiculo} · {f.u.placas}</span></span>
+                    <span className={ST[f.estatus]} style={sx('flex:none')}>{f.estatus}</span>
+                  </span>
+                  <dl className="dl">
+                    <div className="ancho"><dt>Asignada a</dt><dd>{f.asignada === '—' ? <span style={sx('color:#5F6B7A')}>Sin asignar</span> : <>{f.asignada}{f.asg && <span style={sx('color:#5F6B7A;font-size:12px')}> · {estatusAsg(f.asg) === 'En curso' ? 'en curso' : 'desde ' + fmtFecha(f.asg.inicio.slice(0, 10))}</span>}</>}</dd></div>
+                    <div><dt>Custodio(s)</dt><dd>{f.custodiosTxt}</dd></div>
+                    <div><dt>Rendimiento</dt><dd className="mono">{f.rend.toFixed(1)} km/l{f.rend < f.u.rendimiento * 0.8 && <span className="pill p-bad" style={sx('margin-left:6px')}>bajo</span>}</dd></div>
+                    <div className="ancho"><dt>Próximo vencimiento</dt><dd>{pillVenc(f.venc)}</dd></div>
+                  </dl>
+                </FilaM>
+              ))}
+              {tab === 'u' && rowsU.length === 0 && <span style={sx('padding:24px 12px;color:#5F6B7A;text-align:center')}>Sin unidades con estos filtros. Prueba con otra zona o estatus.</span>}
+              {tab === 't' && rowsT.slice(pg.from, pg.to).map(o => (
+                <FilaM key={o.id} sel={o.unidad === ficha} onClick={() => abrirFicha(o.unidad, 'taller')} title="Abrir la ficha de la unidad">
+                  <span style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:nowrap')}>
+                    <span style={sx('display:flex;flex-direction:column;min-width:0')}><span className="mono" style={sx('font-weight:600')}>{o.id}{idsOrdenesStore.has(o.id) && <span className="pill p-info" style={sx('margin-left:6px')}>nueva</span>}</span><span style={sx('font-size:13px;color:#3E4A59')}><span className="mono">{o.unidad}</span> · {fmtFecha(o.fecha)} · {o.tipo}</span></span>
+                    <span className={ST[o.estatus]} style={sx('flex:none')}>{o.estatus}</span>
+                  </span>
+                  <dl className="dl">
+                    <div className="ancho"><dt>Falla reportada</dt><dd>{o.falla}</dd></div>
+                    <div><dt>Proveedor</dt><dd>{o.proveedor}</dd></div>
+                    <div><dt>Costo</dt><dd className="mono">{o.estatus === 'En aseguradora' ? '—' : fmtMXN(o.costo)}</dd></div>
+                    <div><dt>Días fuera</dt><dd className="mono">{o.diasFuera}</dd></div>
+                  </dl>
+                  {o.estatus === 'Abierta' && <button type="button" className="btn" style={sx('min-height:36px;padding:0 12px;align-self:flex-start')} onClick={e => { e.stopPropagation(); cerrarOrden(o) }}>Cerrar orden</button>}
+                </FilaM>
+              ))}
+              {tab === 't' && rowsT.length === 0 && <span style={sx('padding:24px 12px;color:#5F6B7A;text-align:center')}>Sin órdenes con estos filtros. Prueba con otro estatus.</span>}
+              {tab === 'c' && rowsC.slice(pg.from, pg.to).map((c, i) => (
+                <FilaM key={(c.id ?? c.unidad + c.fecha) + i} sel={c.unidad === ficha} onClick={() => abrirFicha(c.unidad, 'comb')} title="Abrir la ficha de la unidad">
+                  <span style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:nowrap')}>
+                    <span style={sx('display:flex;flex-direction:column;min-width:0')}><span className="mono" style={sx('font-weight:600')}>{c.unidad}</span><span style={sx('font-size:13px;color:#3E4A59')}>{fmtFecha(c.fecha)} · {c.origen}{c.id && <span className="pill p-info" style={sx('margin-left:6px')}>nueva</span>}</span></span>
+                    <span className={ST[c.anomalo ? 'Anómalo' : 'Normal']} style={sx('flex:none')}>{c.anomalo ? 'Anómalo' : 'Normal'}</span>
+                  </span>
+                  <dl className="dl">
+                    <div><dt>Litros</dt><dd className="mono">{c.litros.toFixed(1)}</dd></div>
+                    <div><dt>Costo</dt><dd className="mono">{fmtMXN(c.costo)}</dd></div>
+                    <div><dt>Km</dt><dd className="mono">{c.kmGps}</dd></div>
+                    <div><dt>km/l</dt><dd className="mono">{c.rendimiento ? c.rendimiento.toFixed(1) : '—'}</dd></div>
+                  </dl>
+                </FilaM>
+              ))}
+              {tab === 'c' && rowsC.length === 0 && <span style={sx('padding:24px 12px;color:#5F6B7A;text-align:center')}>Sin cargas con estos filtros. Registra una carga o importa el estado de cuenta de la tarjeta.</span>}
+            </div>
+          )}
+          {!movil && (
           <div role="tabpanel" aria-label={tabInfo[1]} style={sx('overflow-x:auto;margin:0 -12px')}>
             {tab === 'u' && (
               <table className="tbl">
@@ -460,6 +548,7 @@ export default function Flotilla() {
               </table>
             )}
           </div>
+          )}
           {tab === 'u' && <Nota>Estatus: lo que el equipo cambió en la plataforma manda sobre el catálogo. Asignada a: cliente · servicio de la asignación en curso o la siguiente programada. Rendimiento: km/l de los últimos 30 días; "bajo" cuando queda 20% abajo de lo esperado para esa unidad.</Nota>}
           {tab === 'c' && <Nota>Consumo anómalo: el rendimiento (km/l) queda muy por debajo de la flotilla o los km del GPS no cuadran con los litros cargados. Las cargas "nuevas" se registraron a mano desde la ficha de la unidad.</Nota>}
           <Pager {...pg} />
@@ -497,7 +586,7 @@ export default function Flotilla() {
       {fichaU && fichaFila && fichaDiario && (
         <div className="drawer" onClick={() => setFicha(null)}>
           <aside role="dialog" aria-modal="true" aria-label={`Ficha de la unidad ${fichaU.id}`} onClick={e => e.stopPropagation()}>
-            <div style={sx('display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px 0')}>
+            <div style={sx(`display:flex;flex-wrap:nowrap;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px ${padFicha}px 0`)}>
               <div style={sx('display:flex;flex-direction:column;gap:4px;min-width:0')}>
                 <span className="lbl">Ficha de la unidad</span>
                 <h2 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:22px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap")}><span className="mono">{fichaU.id}</span><span style={sx('font-weight:500;font-size:16px;color:#3E4A59')}>{fichaU.vehiculo} · {fichaU.placas}</span><span className={ST[fichaFila.estatus]}>{fichaFila.estatus}</span></h2>
@@ -505,16 +594,16 @@ export default function Flotilla() {
               </div>
               <button type="button" onClick={() => setFicha(null)} aria-label="Cerrar" style={sx('width:32px;height:32px;border-radius:8px;border:1px solid #D5DBE3;background:#F3F5F8;color:#3E4A59;font-size:16px;cursor:pointer;flex:none')}>×</button>
             </div>
-            <div style={sx('display:flex;gap:8px;flex-wrap:wrap;padding:14px 22px')}>
+            <div style={sx(`display:flex;gap:8px;flex-wrap:wrap;padding:14px ${padFicha}px`)}>
               <button type="button" className="btn" onClick={() => abrirOrden(fichaU.id)}>Mandar a taller</button>
               <button type="button" className="btn" onClick={() => abrirCarga(fichaU.id)}>Registrar carga / km del día</button>
               <button type="button" className="btn" onClick={() => abrirAsignar(fichaU.id)}>Asignar a un cliente</button>
               <button type="button" className="btn" onClick={() => abrirEstatus(fichaU)}>Cambiar estatus</button>
             </div>
-            <div role="tablist" aria-label="Secciones de la ficha" style={sx('display:flex;gap:4px;flex-wrap:wrap;padding:0 22px 10px;border-bottom:1px solid #EEF1F4')}>
+            <div role="tablist" aria-label="Secciones de la ficha" style={sx(`display:flex;gap:4px;flex-wrap:wrap;padding:0 ${padFicha}px 10px;border-bottom:1px solid #EEF1F4`)}>
               {FTABS.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={k === ftab} className="ftab" onClick={() => setFtab(k)}>{label}<span className="mono" style={sx('font-size:11px;opacity:.8')}>{k === 'asig' ? fichaAsg.length : k === 'taller' ? fichaOrdenes.length : k === 'comb' ? fichaDiario.cargas : ''}</span></button>)}
             </div>
-            <div style={sx('padding:18px 22px;overflow:auto;display:flex;flex-direction:column;gap:16px;flex:1')}>
+            <div style={sx(`padding:18px ${padFicha}px;overflow:auto;display:flex;flex-direction:column;gap:16px;flex:1`)}>
               {ftab === 'resumen' && <>
                 <div style={sx('display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px')}>
                   {([['Vehículo', fichaU.vehiculo], ['Placas', fichaU.placas], ['VIN', fichaU.vin], ['Año', String(fichaU.anio)], ['Zona', fichaU.zona], ['GPS', fichaU.gps], ['Kilometraje', fichaU.km.toLocaleString('es-MX') + ' km'], ['Rendimiento esperado', fichaU.rendimiento.toFixed(1) + ' km/l'], ['Costo mensual', fmtMXN(fichaU.costoMes)]] as [string, string][]).map(([k, v]) => <div key={k} className="dato"><span className="lbl">{k}</span><span className={k === 'VIN' || k === 'Placas' ? 'mono' : ''}>{v}</span></div>)}
@@ -538,7 +627,7 @@ export default function Flotilla() {
                 <Nota>A un cliente se le asignan uno o más custodios y una o más unidades por un tiempo. Aquí está todo lo que esta unidad ha hecho: a quién sirvió, con qué custodios y cuántas horas.</Nota>
                 {fichaAsg.length === 0 && <div style={sx('padding:24px 12px;color:#5F6B7A;text-align:center')}>Esta unidad no tiene asignaciones. Usa "Asignar a un cliente" para darle la primera.</div>}
                 {fichaAsg.length > 0 && (
-                  <div style={sx('overflow-x:auto')}>
+                  <div style={sx('overflow-x:auto;flex:none')}>
                     <table className="tbl sm quiet">
                       <thead><tr><th style={sx('cursor:default')}>Cliente</th><th style={sx('cursor:default')}>Servicio</th><th style={sx('cursor:default')}>Custodios</th><th style={sx('cursor:default')}>Desde</th><th style={sx('cursor:default')}>Hasta</th><th style={sx('cursor:default')}>Horas</th><th style={sx('cursor:default')}>Estatus</th></tr></thead>
                       <tbody>
@@ -563,7 +652,7 @@ export default function Flotilla() {
                   <div style={sx('display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap')}><h3 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:15px;font-weight:600")}>km/l por día · últimos 30 días</h3><span style={sx('font-size:12px;color:#5F6B7A')}>azul: GPS / tarjeta · navy: registro manual · rojo: anómalo · línea: esperado</span></div>
                   <Grafica dias={fichaDiario.dias} esperado={fichaU.rendimiento} />
                 </div>
-                <div style={sx('overflow-x:auto')}>
+                <div style={sx('overflow-x:auto;flex:none')}>
                   <table className="tbl sm quiet">
                     <thead><tr><th style={sx('cursor:default')}>Fecha</th><th style={sx('cursor:default')}>Km</th><th style={sx('cursor:default')}>Litros</th><th style={sx('cursor:default')}>Costo</th><th style={sx('cursor:default')}>km/l</th><th style={sx('cursor:default')}>Cargó tanque</th><th style={sx('cursor:default')}>Origen</th></tr></thead>
                     <tbody>
@@ -584,7 +673,7 @@ export default function Flotilla() {
                 </div>
                 {fichaOrdenes.length === 0 && <div style={sx('padding:24px 12px;color:#5F6B7A;text-align:center')}>Esta unidad no ha pasado por taller. Usa "Mandar a taller" para abrir la primera orden.</div>}
                 {fichaOrdenes.length > 0 && (
-                  <div style={sx('overflow-x:auto')}>
+                  <div style={sx('overflow-x:auto;flex:none')}>
                     <table className="tbl sm quiet">
                       <thead><tr><th style={sx('cursor:default')}>Orden</th><th style={sx('cursor:default')}>Fecha</th><th style={sx('cursor:default')}>Tipo</th><th style={sx('cursor:default')}>Falla / servicio</th><th style={sx('cursor:default')}>Proveedor</th><th style={sx('cursor:default')}>Costo</th><th style={sx('cursor:default')}>Días fuera</th><th style={sx('cursor:default')}>Estatus</th><th style={sx('cursor:default')}></th></tr></thead>
                       <tbody>

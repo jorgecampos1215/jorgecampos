@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Shell } from '../components/Shell'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { ROUTES } from '../lib/routes'
 import { useStore, actions, type SolicitudVacaciones, type TramiteRH } from '../lib/store'
 import { Field, Modal, Pager, btnPriStyle, btnStyle, inputStyle, usePagination, useToast } from '../components/ui'
@@ -31,6 +32,13 @@ a{color:#3448A8}a:hover{color:#0D1D41}
 .tab{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid transparent;background:transparent;color:#3E4A59;font:500 14px 'Montserrat',sans-serif;cursor:pointer}
 .tab[aria-selected="true"]{background:#E9EDFB;border-color:#C7D0F2;color:#0D1D41}
 .tab .n{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5F6B7A}
+/* Celular: las tablas de bajas y movimientos se muestran como tarjetas */
+.fila-m{display:flex;flex-direction:column;gap:8px;width:100%;padding:12px 0;border:0;border-top:1px solid #EEF1F4;background:none;text-align:left;font:inherit;color:inherit;box-sizing:border-box}
+.fila-m:first-child{border-top:0;padding-top:4px}
+.fila-m .dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;font-size:13px;margin:0}
+.fila-m .dl dt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5F6B7A;font-weight:500}
+.fila-m .dl dd{margin:2px 0 0;overflow-wrap:anywhere}
+.fila-m .dl .ancho{grid-column:1/-1}
 `
 
 const SR = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)'
@@ -122,6 +130,9 @@ function Kpi({ label, value, sub, color, onClick }: { label: string; value: stri
 
 export default function RH() {
   const toast = useToast()
+  // Celular: tablas como tarjetas (con selector de orden), reclutamiento en una columna y barras de mes más angostas
+  const modo = useViewport()
+  const movil = modo === 'movil'
   const [tab, setTab] = useState<TabKey>('dir')
   const [selId, setSelId] = useState(PERSONAS[0].id)
   const [q, setQ] = useState('')
@@ -316,7 +327,7 @@ export default function RH() {
               {pageRows.map(p => (
                 <button key={p.id} type="button" onClick={() => setSelId(p.id)} aria-pressed={p.id === p0.id} style={sx('display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:10px;cursor:pointer;font-family:inherit;color:#0D1D41;background:#FFFFFF;border:1px solid ' + (p.id === p0.id ? '#475CC7;box-shadow:0 0 0 2px #E9EDFB' : '#E4E8ED'))}>
                   <span style={sx(av(p.area, 48))}>{ini(p.name)}</span>
-                  <span style={sx('display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left')}>
+                  <span style={sx('display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left' + (movil ? ';flex:1 1 0' : ''))}>
                     <span style={sx('font-weight:600;font-size:14px')}>{p.name}</span>
                     <span style={sx('font-size:13px;color:#3E4A59')}>{p.role}</span>
                     <span style={sx('font-size:12px;color:#5F6B7A')}>{p.area} · {p.site}</span>
@@ -342,7 +353,7 @@ export default function RH() {
             <span className="lbl">Expediente</span>
             <div style={sx('display:flex;gap:16px;align-items:center')}>
               <span style={sx(av(p0.area, 80))}>{ini(p0.name)}</span>
-              <div style={sx('display:flex;flex-direction:column;gap:3px;min-width:0')}>
+              <div style={sx('display:flex;flex-direction:column;gap:3px;min-width:0' + (movil ? ';flex:1 1 0' : ''))}>
                 <span style={sx("font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600")}>{p0.name}</span>
                 <span style={sx('font-size:14px;color:#3E4A59')}>{p0.role}</span>
                 <span className="mono" style={sx('font-size:12px;color:#5F6B7A')}>{p0.id} · {p0.area} · {p0.site}</span>
@@ -445,7 +456,25 @@ export default function RH() {
       )}
 
       {tab === 'off' && (
-        <Section titulo="Bajas en proceso" ayuda="Lista de salida de cada persona. Haz clic en un paso para marcarlo listo o pendiente. Las bajas iniciadas desde el expediente aparecen aquí." style="padding:20px 8px 8px">
+        <Section titulo="Bajas en proceso" ayuda="Lista de salida de cada persona. Haz clic en un paso para marcarlo listo o pendiente. Las bajas iniciadas desde el expediente aparecen aquí." style={movil ? 'padding:20px 14px 14px' : 'padding:20px 8px 8px'}>
+          {movil && (
+            <div style={sx('display:flex;flex-direction:column')}>
+              {off.map((o, oi) => (
+                <div key={o.n + oi} className="fila-m">
+                  <span style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:nowrap')}>
+                    <span style={sx('display:flex;flex-direction:column;min-width:0')}><span style={sx('font-weight:600')}>{o.n}</span><span style={sx('font-size:12px;color:#5F6B7A')}>{o.r}</span></span>
+                    <span className="mono" style={sx('flex:none;font-size:13px')}>{o.d}</span>
+                  </span>
+                  <dl className="dl">
+                    <div className="ancho"><dt>Motivo</dt><dd>{o.why}</dd></div>
+                    {o.steps.map((s, j) => <div key={j}><dt>{OFF_COLS[j]}</dt><dd><button type="button" className={stepCls(s)} title={s === 'No aplica' ? 'No aplica' : 'Cambiar estado'} onClick={() => { if (s !== 'No aplica') { toggleOff(oi, j); toast(`${o.n} · ${OFF_COLS[j]}: ${s === 'Listo' ? 'Pendiente' : 'Listo'}`, s === 'Listo' ? 'warn' : 'ok') } }}>{s}</button></dd></div>)}
+                  </dl>
+                </div>
+              ))}
+              {off.length === 0 && <span style={sx('color:#5F6B7A;font-size:14px')}>Sin bajas en proceso.</span>}
+            </div>
+          )}
+          {!movil && (
           <div style={sx('overflow-x:auto')}>
             <table className="tbl">
               <thead><tr><th>Persona</th><th>Último día</th><th>Motivo</th>{OFF_COLS.map(c => <th key={c}>{c}</th>)}</tr></thead>
@@ -459,6 +488,7 @@ export default function RH() {
               </tbody>
             </table>
           </div>
+          )}
         </Section>
       )}
 
@@ -466,7 +496,8 @@ export default function RH() {
         <Section titulo="Candidatos por etapa" ayuda={`${nVacantes} vacantes abiertas · ${candidatos} candidatos en proceso${vacantes.length > 0 ? ' · nuevas: ' + vacantes.map(v => v.puesto + ' (' + v.sede + ')').join(', ') : ''}. Avanza a cada candidato hasta contratarlo.`}
           acciones={<><button type="button" className="btn" onClick={() => open('vacante', { area: 'Custodia', puesto: 'Custodio', sede: 'Querétaro' })}>Nueva vacante</button><button type="button" className="btn" onClick={() => open('candidato', { puesto: 'Custodio', sede: 'Cuautitlán', fuente: 'Bolsa de trabajo' })}>Agregar candidato</button></>}>
           <div style={sx('overflow-x:auto')}>
-            <div style={sx('display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;min-width:1040px')}>
+            {/* Celular: las 5 etapas en una sola columna; tablet y escritorio: tablero con scroll horizontal */}
+            <div style={sx(movil ? 'display:grid;grid-template-columns:minmax(0,1fr);gap:12px' : 'display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;min-width:1040px')}>
               {cols.map((c, ci) => (
                 <div key={c.name} style={sx('background:#F3F5F8;border:1px solid #E4E8ED;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px')}>
                   <div style={sx('display:flex;justify-content:space-between')}><span style={sx('font-weight:600;font-size:14px')}>{ci + 1}. {c.name}</span><span className="mono" style={sx('font-size:13px;color:#5F6B7A')}>{c.n}</span></div>
@@ -497,13 +528,36 @@ export default function RH() {
             <Kpi label="Bajas de octubre" value={bajasMes.length} color="#B42318" sub={`${bajasVol} voluntarias`} onClick={() => { setMovFiltro('Baja'); pgMov.setPage(0) }} />
             <Kpi label="Rotación mensual" value={rotacion + '%'} sub="bajas del mes entre el total de colaboradores" onClick={() => { setMovFiltro('Todos'); pgMov.setPage(0) }} />
           </section>
-          <Section titulo="Movimientos de 2026" ayuda="Todas las altas y bajas del año. Haz clic en una fila para abrir el expediente." style="padding:20px 8px 8px"
+          <Section titulo="Movimientos de 2026" ayuda="Todas las altas y bajas del año. Haz clic en una fila para abrir el expediente." style={movil ? 'padding:20px 14px 14px' : 'padding:20px 8px 8px'}
             acciones={<><div role="group" aria-label="Tipo de movimiento" style={sx('display:flex;gap:6px;flex-wrap:wrap')}>
               {(['Todos', 'Alta', 'Baja'] as const).map(k => (
                 <button key={k} type="button" className="btn btn-sm" aria-pressed={movFiltro === k} style={sx(movFiltro === k ? 'background:#E9EDFB;border-color:#475CC7;color:#0D1D41' : '')} onClick={() => { setMovFiltro(k); pgMov.setPage(0) }}>{k === 'Todos' ? 'Todos' : k + 's'} · {k === 'Todos' ? altasList.length + bajasAll.length : k === 'Alta' ? altasList.length : bajasAll.length}</button>
               ))}
             </div>
+            {movil && (
+              <select className="sel" aria-label="Ordenar por" value={`${movSort.k}:${movSort.asc ? 'asc' : 'desc'}`} onChange={e => { const [k, d] = e.target.value.split(':'); setMovSort({ k: k as SortKey, asc: d === 'asc' }); pgMov.setPage(0) }} style={sx('min-height:30px;font-size:12px')}>
+                {([['fecha', 'Fecha'], ['nombre', 'Persona'], ['area', 'Área'], ['tipo', 'Movimiento']] as [SortKey, string][]).flatMap(([k, label]) => [<option key={k + 'asc'} value={`${k}:asc`}>{label} ▲</option>, <option key={k + 'desc'} value={`${k}:desc`}>{label} ▼</option>])}
+              </select>
+            )}
             <button type="button" className="btn btn-sm" onClick={() => { descargar(`altas-bajas-2026-${movFiltro.toLowerCase()}.csv`, toCSV([['Fecha', 'Persona', 'Puesto', 'Área', 'Movimiento', 'Motivo'], ...movs.map(m => [m.fecha, m.nombre, m.puesto, m.area, m.tipo, m.motivo])])); toast(`Movimientos exportados: ${movs.length} filas (CSV)`) }}>Descargar CSV</button></>}>
+            {movil && (
+              <div style={sx('display:flex;flex-direction:column')}>
+                {movs.slice(pgMov.from, pgMov.to).map(m => (
+                  <button key={m.fecha + m.nombre + m.tipo} type="button" className="fila-m" aria-disabled={!m.id} style={sx(m.id ? 'cursor:pointer' : 'cursor:default')} title={m.id ? 'Ver expediente' : undefined} onClick={() => { if (m.id) verExpediente(m.id) }}>
+                    <span style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:nowrap')}>
+                      <span style={sx('display:flex;flex-direction:column;min-width:0')}><span style={sx('font-weight:600')}>{m.nombre}</span><span style={sx('font-size:12px;color:#5F6B7A')}>{m.puesto} · {m.area}</span></span>
+                      <span className={m.tipo === 'Alta' ? 'pill p-ok' : 'pill p-bad'} style={sx('flex:none')}>{m.tipo}</span>
+                    </span>
+                    <dl className="dl">
+                      <div><dt>Fecha</dt><dd className="mono">{fechaCorta(m.fecha)}</dd></div>
+                      <div><dt>Motivo</dt><dd>{m.motivo}</dd></div>
+                    </dl>
+                  </button>
+                ))}
+                {movs.length === 0 && <span style={sx('color:#5F6B7A;font-size:14px')}>Sin movimientos de este tipo.</span>}
+              </div>
+            )}
+            {!movil && (
             <div style={sx('overflow-x:auto')}>
               <table className="tbl">
                 <thead><tr><th className="sortable" onClick={() => sortBy('fecha')}>Fecha{sortMark('fecha')}</th><th className="sortable" onClick={() => sortBy('nombre')}>Persona{sortMark('nombre')}</th><th>Puesto</th><th className="sortable" onClick={() => sortBy('area')}>Área{sortMark('area')}</th><th className="sortable" onClick={() => sortBy('tipo')}>Movimiento{sortMark('tipo')}</th><th>Motivo</th></tr></thead>
@@ -517,13 +571,15 @@ export default function RH() {
                 </tbody>
               </table>
             </div>
-            <div style={sx('padding:0 12px')}><Pager {...pgMov} /></div>
+            )}
+            <div style={sx(movil ? 'padding:0' : 'padding:0 12px')}><Pager {...pgMov} /></div>
           </Section>
           <Section titulo="Altas y bajas por mes" ayuda="Verde: altas. Rojo: bajas. Haz clic en un mes para ver el detalle." plegable abierto={false}>
-            <div style={sx('display:flex;gap:18px;align-items:flex-end;height:130px')}>
+            {/* Celular: barras más angostas y sin envolver, para que los 10 meses quepan en una fila dentro de los 130px de alto */}
+            <div style={sx(movil ? 'display:flex;flex-wrap:nowrap;gap:6px;align-items:flex-end;height:130px' : 'display:flex;gap:18px;align-items:flex-end;height:130px')}>
               {meses.map(([n, a, b]) => (
-                <button key={n} type="button" title={`${n}: ${a} altas · ${b} bajas`} onClick={() => { setMovFiltro('Todos'); toast(`${n} 2026: ${a} altas · ${b} bajas`, 'info') }} style={sx('flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;padding:0;cursor:pointer;font-family:inherit')}>
-                  <div style={sx('display:flex;gap:3px;align-items:flex-end;height:104px')}><div title={`Altas ${a}`} style={sx('width:14px;border-radius:3px 3px 0 0;background:#2B9A66;height:' + barH(a) + 'px')}></div><div title={`Bajas ${b}`} style={sx('width:14px;border-radius:3px 3px 0 0;background:#D9534F;height:' + barH(b) + 'px')}></div></div>
+                <button key={n} type="button" title={`${n}: ${a} altas · ${b} bajas`} onClick={() => { setMovFiltro('Todos'); toast(`${n} 2026: ${a} altas · ${b} bajas`, 'info') }} style={sx('flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;padding:0;cursor:pointer;font-family:inherit' + (movil ? ';min-width:0' : ''))}>
+                  <div style={sx('display:flex;gap:3px;align-items:flex-end;height:104px')}><div title={`Altas ${a}`} style={sx((movil ? 'width:10px' : 'width:14px') + ';border-radius:3px 3px 0 0;background:#2B9A66;height:' + barH(a) + 'px')}></div><div title={`Bajas ${b}`} style={sx((movil ? 'width:10px' : 'width:14px') + ';border-radius:3px 3px 0 0;background:#D9534F;height:' + barH(b) + 'px')}></div></div>
                   <span style={sx('font-size:12px;color:#5F6B7A')}>{n}</span>
                 </button>
               ))}

@@ -5,6 +5,7 @@ import { PageHeader, Section, Nota } from '../components/Page'
 import { Field, Modal, Pager, btnPriStyle, btnStyle, inputStyle, usePagination, useToast } from '../components/ui'
 import { ROUTES } from '../lib/routes'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { actions, useStore } from '../lib/store'
 import { CLIENTES, ESTATUS_CUSTODIO, ZONAS, conteoCustodios, custodios as SEED, servicios, unidades as UNIDADES, type Custodio, type EstatusCustodio, type TipoServicio, type Zona } from '../data/seed'
 import { HOY_DEMO, asignaciones as ASIG_SEED, asignacionesDeCustodio, horasSemana, inicioSemana, type Asignacion, type EstatusAsignacion } from '../data/asignaciones'
@@ -57,6 +58,23 @@ a{color:#3448A8}a:hover{color:#0D1D41}
 .tab[aria-selected="true"]{color:#0D1D41;border-bottom-color:#475CC7}
 .kpi{display:flex;flex-direction:column;gap:2px;padding:10px 14px;border:1px solid #E4E8ED;border-radius:8px;min-width:120px}
 .kpi .v{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:700;color:#0D1D41}
+/* Celular: la tabla de custodios y el historial se muestran como tarjetas; la agenda, por día */
+.fila-m{display:flex;flex-direction:column;gap:8px;width:100%;padding:12px 0;border:0;border-top:1px solid #EEF1F4;background:none;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.fila-m:first-child{border-top:0;padding-top:4px}
+.fila-m .dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;font-size:13px;margin:0}
+.fila-m .dl dt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5F6B7A;font-weight:500}
+.fila-m .dl dd{margin:2px 0 0;overflow-wrap:anywhere}
+.ag-dia{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-radius:8px;background:#FAFBFC;border:1px solid #EEF1F4}
+.ag-dia.hoy{background:#F0F3FD;border-color:#C7D0F2}
+.ag-dia .d{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:600;color:#0D1D41;text-transform:none;letter-spacing:0}
+.ag-fila-m{display:grid;grid-template-columns:minmax(96px,34%) minmax(0,1fr);gap:8px;padding:8px 0;border-top:1px solid #EEF1F4;align-items:start}
+.ag-fila-m .ag-cust{padding:0}
+.ag-fila-m .blks{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ag-chip{min-height:40px;padding:0 4px;border-radius:8px;border:1px solid #D5DBE3;background:#FFFFFF;color:#0D1D41;font:600 12px 'Montserrat',sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;flex:1 1 0;min-width:0;white-space:nowrap}
+.ag-chip small{font-size:11px;font-weight:500;color:#5F6B7A}
+.ag-chip[aria-pressed="true"]{background:#0D1D41;border-color:#0D1D41;color:#FFFFFF}
+.ag-chip[aria-pressed="true"] small{color:#C7D0F2}
+.ag-chip.hoy:not([aria-pressed="true"]){background:#F0F3FD;border-color:#C7D0F2}
 @media print{.no-print{display:none !important}}
 `
 
@@ -84,10 +102,17 @@ const COLS: [SortKey, string][] = [['nombre', 'Custodio'], ['zona', 'Zona'], ['e
 
 /* ───────────────────────── Agenda semanal (calendario Lun–Dom) ───────────────────────── */
 function AgendaSemanal({ custodios, todas, semana, setSemana, onCustodio, onAsignacion, compacta }: { custodios: Custodio[]; todas: Asignacion[]; semana: number; setSemana: (n: number) => void; onCustodio?: (id: string) => void; onAsignacion: (a: Asignacion) => void; compacta?: boolean }) {
+  // Celular: la rejilla Lun–Dom no cabe; se muestra un día a la vez (chips de día) o, para un solo custodio, los 7 días en lista.
+  const movil = useViewport() === 'movil'
+  const [diaSel, setDiaSel] = useState<number | null>(null)
   const ini = new Date(inicioSemana(HOY_DEMO).getTime() + semana * 7 * DAY)
   const dias = Array.from({ length: 7 }, (_, i) => new Date(ini.getTime() + i * DAY))
   const fin = new Date(ini.getTime() + 7 * DAY)
   const esHoy = (d: Date) => d.toDateString() === HOY_DEMO.toDateString()
+  const idxHoy = dias.findIndex(esHoy)
+  const diaIdx = diaSel ?? (idxHoy >= 0 ? idxHoy : 0)
+  const listaMovil = movil && (!compacta || custodios.length > 0)
+  const fechaLarga = (d: Date) => `${DIA[(d.getDay() + 6) % 7]} ${d.getDate()} ${MES[d.getMonth()]} ${d.getFullYear()}`
   const titulo = `Semana ${semanaISO(ini)} · ${ini.getDate()} ${ini.getMonth() !== dias[6].getMonth() ? MES[ini.getMonth()] + ' ' : ''}– ${dias[6].getDate()} ${MES[dias[6].getMonth()]} ${dias[6].getFullYear()}`
   const bloques = (c: Custodio, d: Date) => {
     const d0 = d.getTime(), d1 = d0 + DAY
@@ -118,7 +143,60 @@ function AgendaSemanal({ custodios, todas, semana, setSemana, onCustodio, onAsig
           <span className="lg"><i style={sx('background:#D86A6A')}></i>Cancelada</span>
         </div>
       </div>
-      <div style={sx('overflow-x:auto')}>
+      {listaMovil && compacta && (
+        /* Celular · un custodio: los 7 días en lista, cada uno con sus bloques */
+        <div style={sx('display:flex;flex-direction:column;gap:6px')}>
+          {dias.map(d => {
+            const bl = bloques(custodios[0], d)
+            return (
+              <div key={d.getTime()} className={'ag-dia' + (esHoy(d) ? ' hoy' : '')}>
+                <span className="lbl" style={sx('display:flex;flex-direction:column;gap:1px;flex:0 0 72px')}><span>{DIA[(d.getDay() + 6) % 7]}</span><span className="d">{d.getDate()} {MES[d.getMonth()]}</span>{esHoy(d) && <span>hoy</span>}</span>
+                <div style={sx('display:flex;flex-direction:column;gap:4px;flex:1 1 160px;min-width:0')}>
+                  {bl.map(({ a, rango }) => (
+                    <button key={a.id} type="button" className={`blk blk-${a.estatus.split(' ')[0]}`} title={`${a.cliente} · ${a.servicio} · ${rango} · ${a.estatus}`} onClick={() => onAsignacion(a)}>
+                      <span className="c">{a.cliente}</span>
+                      <span className="h">{a.servicio} · {rango}</span>
+                    </button>
+                  ))}
+                  {bl.length === 0 && <span style={sx('font-size:12px;color:#5F6B7A')}>Sin asignación</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {listaMovil && !compacta && (
+        /* Celular · varios custodios: se elige el día y se listan todos los custodios con sus bloques de ese día */
+        <div style={sx('display:flex;flex-direction:column;gap:8px')}>
+          <div role="group" aria-label="Día de la semana" style={sx('display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px')}>
+            {dias.map((d, i) => <button key={d.getTime()} type="button" className={'ag-chip' + (esHoy(d) ? ' hoy' : '')} aria-pressed={i === diaIdx} onClick={() => setDiaSel(i)}>{DIA[(d.getDay() + 6) % 7]}<small>{d.getDate()} {MES[d.getMonth()]}</small></button>)}
+          </div>
+          <span className="lbl" style={sx('padding-top:4px')}>{fechaLarga(dias[diaIdx])}{esHoy(dias[diaIdx]) ? ' · hoy' : ''} · {custodios.length} custodio{custodios.length === 1 ? '' : 's'}</span>
+          <div style={sx('display:flex;flex-direction:column')}>
+            {custodios.map(c => {
+              const hs = Math.round(horasSemana(c.id, ini, todas))
+              const bl = bloques(c, dias[diaIdx])
+              return (
+                <div key={c.id} className="ag-fila-m">
+                  <button type="button" className="ag-cust" onClick={() => onCustodio?.(c.id)}><span className="nm">{c.nombre}</span><span className="hs mono" style={sx(hs > 48 ? 'color:#B42318;font-weight:600' : '')}>{hs} h{hs > 48 ? ' · exceso' : ''}</span></button>
+                  <div className="blks">
+                    {bl.map(({ a, rango }) => (
+                      <button key={a.id} type="button" className={`blk blk-${a.estatus.split(' ')[0]}`} title={`${a.cliente} · ${a.servicio} · ${rango} · ${a.estatus}`} onClick={() => onAsignacion(a)}>
+                        <span className="c">{a.cliente}</span>
+                        <span className="h">{a.servicio} · {rango}</span>
+                      </button>
+                    ))}
+                    {bl.length === 0 && <span style={sx('font-size:12px;color:#5F6B7A;padding:6px 0')}>—</span>}
+                  </div>
+                </div>
+              )
+            })}
+            {custodios.length === 0 && <span style={sx('padding:16px;color:#5F6B7A;text-align:center')}>Sin custodios en esta vista.</span>}
+          </div>
+        </div>
+      )}
+      {!listaMovil && (
+      <div style={sx('overflow-x:auto;flex:none')}>
         <div className="ag" style={sx(`grid-template-columns:${compacta ? '0px' : '170px'} repeat(7,minmax(104px,1fr))`)}>
           <span></span>
           {dias.map(d => <span key={d.getTime()} className={'ag-head lbl' + (esHoy(d) ? ' hoy' : '')}><span>{DIA[(d.getDay() + 6) % 7]}</span><span className="d">{d.getDate()} {MES[d.getMonth()]}{esHoy(d) ? ' · hoy' : ''}</span></span>)}
@@ -143,6 +221,7 @@ function AgendaSemanal({ custodios, todas, semana, setSemana, onCustodio, onAsig
           {custodios.length === 0 && <span style={sx('grid-column:1/-1;padding:16px;color:#5F6B7A;text-align:center')}>Sin custodios en esta vista.</span>}
         </div>
       </div>
+      )}
       {!compacta && custodios.length > 0 && total === 0 && <Nota>Ninguno de estos custodios tiene asignaciones en esta semana. Cambia de semana o usa “Asignar a un cliente” desde el expediente.</Nota>}
     </div>
   )
@@ -150,19 +229,41 @@ function AgendaSemanal({ custodios, todas, semana, setSemana, onCustodio, onAsig
 
 /* ───────────────────────── Historial completo de asignaciones ───────────────────────── */
 function Historial({ lista, onAsignacion }: { lista: Asignacion[]; onAsignacion: (a: Asignacion) => void }) {
+  // Celular: la tabla de 8 columnas se vuelve una lista de tarjetas con los mismos datos
+  const movil = useViewport() === 'movil'
   const pg = usePagination(lista.length, 10)
   const horas = Math.round(lista.reduce((n, a) => n + a.horas, 0))
   const incidentes = lista.filter(a => a.resultado === 'Con incidente').length
   return (
     <div style={sx('display:flex;flex-direction:column;gap:12px')}>
       <div style={sx('display:flex;gap:10px;flex-wrap:wrap')}>
-        <div className="kpi"><span className="lbl">Asignaciones</span><span className="v">{lista.length}</span></div>
-        <div className="kpi"><span className="lbl">Horas acumuladas</span><span className="v">{horas.toLocaleString('es-MX')} h</span></div>
-        <div className="kpi"><span className="lbl">Con incidente</span><span className="v" style={sx(incidentes ? 'color:#B42318' : '')}>{incidentes}</span></div>
-        <div className="kpi"><span className="lbl">En curso / programadas</span><span className="v">{lista.filter(a => a.estatus === 'En curso' || a.estatus === 'Programada').length}</span></div>
+        <div className="kpi" style={sx(movil ? 'flex:1 1 40%;min-width:0' : '')}><span className="lbl">Asignaciones</span><span className="v">{lista.length}</span></div>
+        <div className="kpi" style={sx(movil ? 'flex:1 1 40%;min-width:0' : '')}><span className="lbl">Horas acumuladas</span><span className="v">{horas.toLocaleString('es-MX')} h</span></div>
+        <div className="kpi" style={sx(movil ? 'flex:1 1 40%;min-width:0' : '')}><span className="lbl">Con incidente</span><span className="v" style={sx(incidentes ? 'color:#B42318' : '')}>{incidentes}</span></div>
+        <div className="kpi" style={sx(movil ? 'flex:1 1 40%;min-width:0' : '')}><span className="lbl">En curso / programadas</span><span className="v">{lista.filter(a => a.estatus === 'En curso' || a.estatus === 'Programada').length}</span></div>
       </div>
       <Nota>Todas las asignaciones del custodio, de la más reciente a la más antigua. Haz clic en una para ver el detalle.</Nota>
-      <div style={sx('overflow-x:auto')}>
+      {movil && (
+        <div style={sx('display:flex;flex-direction:column')}>
+          {lista.slice(pg.from, pg.to).map(a => (
+            <button key={a.id} type="button" className="fila-m" onClick={() => onAsignacion(a)}>
+              <span style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:nowrap')}>
+                <span style={sx('display:flex;flex-direction:column;min-width:0')}><span style={sx('font-weight:600')}>{a.cliente}</span><span className="mono" style={sx('font-size:12px;color:#5F6B7A')}>{a.servicio} · {fmtFecha(a.inicio)}</span></span>
+                {a.resultado ? <span className={RES_CLS[a.resultado]} style={sx('flex:none')}>{a.resultado}</span> : <span className={ASG_CLS[a.estatus]} style={sx('flex:none')}>{a.estatus}</span>}
+              </span>
+              <dl className="dl">
+                <div><dt>Ruta</dt><dd>{a.ruta}</dd></div>
+                <div><dt>Unidad</dt><dd className="mono">{a.unidades.join(', ') || '—'}</dd></div>
+                <div><dt>Horario</dt><dd className="mono">{fmtHorario(a)}</dd></div>
+                <div><dt>Horas</dt><dd className="mono">{a.horas} h</dd></div>
+              </dl>
+            </button>
+          ))}
+          {lista.length === 0 && <span style={sx('padding:24px 12px;color:#5F6B7A;text-align:center')}>Este custodio aún no tiene asignaciones registradas.</span>}
+        </div>
+      )}
+      {!movil && (
+      <div style={sx('overflow-x:auto;flex:none')}>
         <table className="tbl">
           <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Ruta</th><th>Unidad</th><th>Horario</th><th>Horas</th><th>Resultado</th></tr></thead>
           <tbody>
@@ -182,6 +283,7 @@ function Historial({ lista, onAsignacion }: { lista: Asignacion[]; onAsignacion:
           </tbody>
         </table>
       </div>
+      )}
       <Pager {...pg} />
     </div>
   )
@@ -193,6 +295,9 @@ const TABS: [Tab, string][] = [['resumen', 'Resumen'], ['historial', 'Historial 
 
 export default function Custodios() {
   const toast = useToast()
+  // Celular: la tabla se vuelve lista de tarjetas (con selector de orden) y el expediente acomoda su encabezado en una columna
+  const modo = useViewport()
+  const movil = modo === 'movil'
   const asigStore = useStore(s => s.asignaciones ?? [])
   const clientesNuevos = useStore(s => s.clientesNuevos ?? [])
   const overrides = useStore(s => s.estatusUnidades ?? [])
@@ -361,8 +466,37 @@ export default function Custodios() {
             <option value="Todas">Todas las zonas</option>
             {ZONAS.map(z => <option key={z} value={z}>{z}</option>)}
           </select>
+          {movil && (
+            <select aria-label="Ordenar por" value={sort ? `${sort.k}:${sort.dir}` : ''} onChange={e => { const [k, d] = e.target.value.split(':'); setSort(k ? { k: k as SortKey, dir: d === '-1' ? -1 : 1 } : null) }} style={sx(inputStyle + ';width:auto;min-height:36px')}>
+              <option value="">Ordenar: sin orden</option>
+              {COLS.flatMap(([k, label]) => [<option key={k + '1'} value={`${k}:1`}>{label} ▲</option>, <option key={k + '-1'} value={`${k}:-1`}>{label} ▼</option>])}
+            </select>
+          )}
           <button type="button" className="btn btn-sm" onClick={exportar}>Exportar CSV</button>
         </>}>
+        {movil && (
+          <div style={sx('display:flex;flex-direction:column')}>
+            {pagina.map(r => {
+              const n = asignacionesDeCustodio(r.id, todas).filter(a => new Date(a.inicio) < new Date(inicioSemana(HOY_DEMO).getTime() + 7 * DAY) && new Date(a.fin) > inicioSemana(HOY_DEMO)).length
+              return (
+                <button key={r.id} type="button" className="fila-m" data-lista="custodio" onClick={() => abrirExpediente(r.id)}>
+                  <span style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:nowrap')}>
+                    <span style={sx('display:flex;flex-direction:column;min-width:0')}><span style={sx('font-weight:600')}>{r.nombre}</span><span className="mono" style={sx('font-size:12px;color:#5F6B7A')}>{r.id} · {r.zona}</span></span>
+                    <span className={CLS[r.estatus]} style={sx('flex:none')}>{r.estatus}</span>
+                  </span>
+                  <dl className="dl">
+                    <div><dt>Servicio actual</dt><dd>{r.asignacion}</dd></div>
+                    <div><dt>Documentos</dt><dd><span className={docCls(r.docs)}>{r.docs}</span></dd></div>
+                    <div><dt>Desempeño</dt><dd className="mono">{r.calificacion ? r.calificacion.toFixed(1) + ' / 5' : '—'}</dd></div>
+                    <div><dt>Esta semana</dt><dd className="mono" style={sx('color:#5F6B7A')}>{n ? `${n} asignaci${n === 1 ? 'ón' : 'ones'}` : '—'}</dd></div>
+                  </dl>
+                </button>
+              )
+            })}
+            {rows.length === 0 && <span style={sx('padding:24px 12px;color:#5F6B7A;text-align:center')}>{vacio}</span>}
+          </div>
+        )}
+        {!movil && (
         <div style={sx('overflow-x:auto;margin:0 -12px')}>
           <table className="tbl">
             <thead><tr>{COLS.map(([k, label]) => <th key={k} className="sort" aria-sort={sort?.k === k ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'} onClick={() => ordenar(k)}>{label}{sort?.k === k ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>)}<th>Esta semana</th></tr></thead>
@@ -383,6 +517,7 @@ export default function Custodios() {
             </tbody>
           </table>
         </div>
+        )}
         <Pager {...pg} />
       </Section>
 
@@ -410,13 +545,14 @@ export default function Custodios() {
                 <span className="pill p-mute mono" style={sx(horasSel > 48 ? 'background:#FDE8E8;color:#B42318' : '')}>{horasSel} h esta semana{horasSel > 48 ? ' · exceso' : ''}</span>
               </div>
             </div>
-            <div style={sx('display:flex;flex-direction:column;gap:2px;text-align:right')}>
+            <div style={sx('display:flex;flex-direction:column;gap:2px;' + (movil ? 'text-align:left;flex:1 1 100%;padding-top:4px;border-top:1px solid #EEF1F4' : 'text-align:right'))}>
               <span className="lbl">{actual ? (actual.estatus === 'En curso' ? 'Servicio actual' : 'Próxima asignación') : 'Servicio actual'}</span>
               <span style={sx('font-weight:600')}>{actual ? `${actual.cliente} · ${actual.servicio}` : sel.asignacion}</span>
               {actual && <span className="mono" style={sx('font-size:12px;color:#5F6B7A')}>{fmtFecha(actual.inicio)} · {fmtHorario(actual)}</span>}
             </div>
           </div>
-          <div role="tablist" aria-label="Secciones del expediente" className="no-print" style={sx('display:flex;gap:4px;border-bottom:1px solid #E4E8ED;overflow-x:auto;position:sticky;top:-20px;background:#FFFFFF;z-index:1;padding-top:4px')}>
+          {/* flex:none: el cuerpo del modal es un flex en columna con alto limitado y, al tener overflow, esta barra se encogía hasta desaparecer */}
+          <div role="tablist" aria-label="Secciones del expediente" className="no-print" style={sx('display:flex;gap:4px;border-bottom:1px solid #E4E8ED;position:sticky;top:-20px;background:#FFFFFF;z-index:1;padding-top:4px;flex:none;overflow-x:auto;flex-wrap:nowrap;' + (movil ? '-webkit-overflow-scrolling:touch' : ''))}>
             {TABS.map(([k, label]) => <button key={k} type="button" role="tab" className="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{label}{k === 'historial' ? ` (${histSel.length})` : ''}</button>)}
           </div>
 

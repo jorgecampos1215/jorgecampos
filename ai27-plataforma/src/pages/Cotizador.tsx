@@ -6,6 +6,7 @@ import { Field, Modal, btnPriStyle, btnStyle, inputStyle, useToast } from '../co
 import { ROUTES } from '../lib/routes'
 import { actions, useStore } from '../lib/store'
 import { sx, fmtMXN as fmt } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { clientes as seedClientes, servicios, ZONAS, type Zona } from '../data/seed'
 import { CIUDADES, etiqueta, factorRiesgo, ruta as rutaDe, tiempoTexto, zonaDe } from '../data/rutas'
 import type { CotizacionPayload } from './CotizacionPDF'
@@ -41,6 +42,9 @@ const RATES_INIT: Rates = [
 const ZONA_TARIFA: Record<Zona, string> = { Centro: 'Centro', Bajío: 'Bajío', Occidente: 'Occidente', Noreste: 'Noreste', Golfo: 'Golfo', Sureste: 'Golfo', Noroeste: 'Noreste' }
 const RATES_KEY = 'ai27-tarifas-v1'
 const FOLIO = 'COT-1182'
+/** Encabezados de la tabla de tarifas (en celular se usan como etiqueta de cada campo). */
+const TARIFA_COLS = ['Custodio / jornada', 'Unidad / km', 'Dedicado / mes', 'Monitoreo / unidad']
+const TARIFA_INPUT = 'width:100%;min-height:40px;background:#F3F5F8;border:1px solid #D5DBE3;border-radius:8px;color:#0D1D41;padding:0 10px;font-size:14px;box-sizing:border-box'
 
 function cargarTarifas(): Rates {
   try {
@@ -61,6 +65,10 @@ const corto = (s: string) => s.split(',')[0].trim()
 export default function Cotizador() {
   const navigate = useNavigate()
   const toast = useToast()
+  // Tablet y celular: la tarjeta de precio ocupa todo el ancho y se pega debajo de la barra superior de Shell; en celular las tarifas van por zona.
+  const modo = useViewport()
+  const compacto = modo !== 'escritorio'
+  const movil = modo === 'movil'
   const [search] = useSearchParams()
   const nuevos = useStore(s => s.clientesNuevos ?? [])
   // Clientes de seed + los dados de alta en CRM (store)
@@ -259,7 +267,7 @@ export default function Cotizador() {
                   {clientes.map(x => <option key={x.nombre} value={x.nombre}>{x.nombre}</option>)}
                 </select>
               </label>
-              <div className="field">Contacto<span style={sx("min-height:40px;display:flex;align-items:center;font-size:14px;color:#0D1D41")}>{cli.contacto} · {cli.correo}</span></div>
+              <div className="field">Contacto<span style={sx("min-height:40px;display:flex;align-items:center;font-size:14px;color:#0D1D41" + (movil ? ';overflow-wrap:anywhere' : ''))}>{cli.contacto} · {cli.correo}</span></div>
             </div>
             <div role="tablist" aria-label="Tipo de servicio" style={sx('display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:10px')}>
               {TABS.map(([k, label, desc]) => (
@@ -331,7 +339,7 @@ export default function Cotizador() {
         </div>
 
         {/* Derecha: precio y acciones */}
-        <aside className="card" aria-label="Precio" style={sx('flex:1 1 320px;max-width:420px;display:flex;flex-direction:column;gap:12px;border-color:#C7D0F2;position:sticky;top:20px')}>
+        <aside className="card" aria-label="Precio" style={sx('flex:1 1 320px;max-width:' + (compacto ? 'none' : '420px') + ';display:flex;flex-direction:column;gap:12px;border-color:#C7D0F2;position:sticky;top:' + (compacto ? '73px' : '20px'))}>
           <div style={sx('display:flex;flex-direction:column;gap:2px')}>
             <span className="lbl">{priceLbl} · {tipo}</span>
             <span style={sx("font-family:'Montserrat',sans-serif;font-size:40px;font-weight:700;color:#0D1D41;letter-spacing:-.01em")}>{fmt(price)}</span>
@@ -359,17 +367,33 @@ export default function Cotizador() {
 
       <Section titulo="Tarifas base por zona" ayuda="Lo que cuesta cada recurso en cada zona. Editables; un cliente puede tener tarifa pactada distinta." plegable abierto={false}
         acciones={<><button type="button" className="btn" style={sx('min-height:34px;font-size:13px')} onClick={restaurarTarifas}>Restaurar</button><button type="button" className="btn" style={sx('min-height:34px;font-size:13px' + (ratesDirty ? ';border-color:#475CC7;color:#3448A8' : ''))} onClick={guardarTarifas}>Guardar tarifas{ratesDirty ? ' ●' : ''}</button></>}>
+        {movil ? (
+          /* Celular: un bloque por zona con sus 4 tarifas etiquetadas (la rejilla de 5 columnas no cabe) */
+          <div style={sx('display:flex;flex-direction:column;gap:12px')}>
+            {rates.map(([z, vs], i) => (
+              <div key={z} style={sx('display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #E4E8ED;border-radius:10px;font-size:14px')}>
+                <span style={sx(i === zi ? 'font-weight:600;color:#0D1D41' : '')}>{z}{i === zi ? ' ●' : ''}</span>
+                <div style={sx('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;--sx-fijo:1')}>
+                  {vs.map((v, vi) => (
+                    <label key={z + vi} style={sx('display:flex;flex-direction:column;gap:4px;min-width:0')}><span className="lbl" style={sx('font-size:11px')}>{TARIFA_COLS[vi]}</span><input type="text" value={v} onChange={e => setRate(i, vi, e.target.value)} className="mono" aria-label={`Tarifa ${z} · ${TARIFA_COLS[vi]}`} style={sx(TARIFA_INPUT)} /></label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
         <div style={sx('overflow-x:auto')}>
           <div style={sx('display:grid;grid-template-columns:140px repeat(4,minmax(120px,1fr));gap:8px;min-width:640px;align-items:center;font-size:14px')}>
-            <span className="lbl">Zona</span><span className="lbl">Custodio / jornada</span><span className="lbl">Unidad / km</span><span className="lbl">Dedicado / mes</span><span className="lbl">Monitoreo / unidad</span>
+            <span className="lbl">Zona</span>{TARIFA_COLS.map(c => <span key={c} className="lbl">{c}</span>)}
             {rates.map(([z, vs], i) => [
               <span key={z} style={sx(i === zi ? 'font-weight:600;color:#0D1D41' : '')}>{z}{i === zi ? ' ●' : ''}</span>,
               ...vs.map((v, vi) => (
-                <label key={z + vi} style={sx('display:flex')}><span style={sx('position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)')}>Tarifa {z}</span><input type="text" value={v} onChange={e => setRate(i, vi, e.target.value)} className="mono" style={sx('width:100%;min-height:40px;background:#F3F5F8;border:1px solid #D5DBE3;border-radius:8px;color:#0D1D41;padding:0 10px;font-size:14px;box-sizing:border-box')} /></label>
+                <label key={z + vi} style={sx('display:flex')}><span style={sx('position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)')}>Tarifa {z}</span><input type="text" value={v} onChange={e => setRate(i, vi, e.target.value)} className="mono" style={sx(TARIFA_INPUT)} /></label>
               )),
             ])}
           </div>
         </div>
+        )}
         <Nota>● zona que alimenta el cálculo actual (según el origen). Zonas {ZONAS.filter(z => !rates.some(r => r[0] === z)).join(' y ')} usan la zona vecina.</Nota>
       </Section>
 

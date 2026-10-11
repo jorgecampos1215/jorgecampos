@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 
 /* ───────────────────────── Toast ─────────────────────────
  * Aviso breve abajo a la derecha. Úsalo para confirmar acciones que no tienen otro efecto visible
@@ -48,16 +49,18 @@ export function Modal({ open, onClose, title, children, footer, width = 560 }: {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+  const movil = useViewport() === 'movil'
   if (!open) return null
+  const pad = movil ? '16px' : '22px'
   return (
-    <div onClick={onClose} style={sx('position:fixed;inset:0;background:rgba(18,24,33,.38);display:flex;align-items:center;justify-content:center;padding:16px;z-index:900')}>
-      <div role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()} style={sx(`background:#FFFFFF;border:1px solid #E4E8ED;border-radius:12px;width:min(${width}px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;font-family:'Montserrat',system-ui,sans-serif;color:#0D1D41;box-shadow:0 20px 60px rgba(18,24,33,.18)`)}>
-        <div style={sx('display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid #EEF1F4')}>
-          <h2 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:18px;font-weight:600")}>{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Cerrar" style={sx('width:32px;height:32px;border-radius:8px;border:1px solid #D5DBE3;background:#F3F5F8;color:#3E4A59;font-size:16px;cursor:pointer')}>×</button>
+    <div onClick={onClose} style={sx(`position:fixed;inset:0;background:rgba(18,24,33,.38);display:flex;align-items:center;justify-content:center;padding:${movil ? 12 : 16}px;z-index:900`)}>
+      <div role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()} style={sx(`background:#FFFFFF;border:1px solid #E4E8ED;border-radius:12px;width:min(${width}px,100%);max-height:${movil ? '92vh' : 'calc(100vh - 32px)'};display:flex;flex-direction:column;font-family:'Montserrat',system-ui,sans-serif;color:#0D1D41;box-shadow:0 20px 60px rgba(18,24,33,.18)`)}>
+        <div style={sx(`display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:12px;padding:${movil ? '14px 16px' : '18px 22px'};border-bottom:1px solid #EEF1F4`)}>
+          <h2 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:18px;font-weight:600;min-width:0;overflow-wrap:anywhere")}>{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Cerrar" style={sx('flex:none;width:36px;height:36px;min-height:36px;border-radius:8px;border:1px solid #D5DBE3;background:#F3F5F8;color:#3E4A59;font-size:18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center')}>×</button>
         </div>
-        <div style={sx('padding:20px 22px;overflow:auto;display:flex;flex-direction:column;gap:14px')}>{children}</div>
-        {footer && <div style={sx('display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid #EEF1F4;flex-wrap:wrap')}>{footer}</div>}
+        <div className="modal-body" style={sx(`padding:${movil ? '16px' : '20px 22px'};overflow:auto;display:flex;flex-direction:column;gap:14px`)}>{children}</div>
+        {footer && <div style={sx(`display:flex;justify-content:flex-end;gap:10px;padding:${movil ? '12px' : '14px'} ${pad};border-top:1px solid #EEF1F4;flex-wrap:wrap`)}>{footer}</div>}
       </div>
     </div>
   )
@@ -92,7 +95,7 @@ export function Pager({ page, pages, total, from, to, setPage }: ReturnType<type
   return (
     <div style={sx('display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:#5F6B7A;padding-top:8px')}>
       <span className="mono">{from + 1}–{to} de {total.toLocaleString('es-MX')}</span>
-      <div style={sx('display:flex;gap:6px;align-items:center')}>
+      <div style={sx('display:flex;flex-wrap:nowrap;gap:6px;align-items:center;white-space:nowrap')}>
         <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)} style={sx(btnStyle + ';min-height:32px;padding:0 10px' + (page === 0 ? ';opacity:.45;cursor:default' : ''))}>‹ Anterior</button>
         <span className="mono" style={sx('padding:0 6px')}>{page + 1} / {pages}</span>
         <button type="button" disabled={page >= pages - 1} onClick={() => setPage(page + 1)} style={sx(btnStyle + ';min-height:32px;padding:0 10px' + (page >= pages - 1 ? ';opacity:.45;cursor:default' : ''))}>Siguiente ›</button>

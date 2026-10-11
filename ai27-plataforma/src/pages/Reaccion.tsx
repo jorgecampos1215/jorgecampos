@@ -4,6 +4,7 @@ import { Shell } from '../components/Shell'
 import { PageHeader, Pasos, Section, Nota } from '../components/Page'
 import { ROUTES } from '../lib/routes'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { useToast } from '../components/ui'
 import { FRANJAS, casoPorId, casos, fmt, incidentesEn, mapaCalor, type Caso, type Entrada, type Resultado } from '../data/reaccion'
 
@@ -54,6 +55,8 @@ const CACHE: Record<string, Estado> = {}
 
 export default function Reaccion() {
   const toast = useToast()
+  // Celular: el selector de caso ocupa todo el ancho y el mapa de calor se compacta (sigue con scroll horizontal).
+  const movil = useViewport() === 'movil'
   const [search, setSearch] = useSearchParams()
   const caso = casoPorId(search.get('inc'))
   const [estados, setEstadosRaw] = useState<Record<string, Estado>>(CACHE)
@@ -114,8 +117,9 @@ export default function Reaccion() {
           <span style={sx("font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600")}>{caso.titulo}</span>
           <span style={sx('color:#5F6B7A;font-size:14px')}>{caso.sub}</span>
         </div>
-        <label style={sx('display:flex;flex-direction:column;gap:4px;font-size:12px;color:#5F6B7A')}>Cambiar de caso
-          <select className="sel" value={caso.id} onChange={e => abrir(e.target.value)} aria-label="Abrir otro caso">
+        {/* min-width:0 + max-width:100%: el <select> toma el ancho de su opción más larga y desbordaba la pantalla en celular */}
+        <label style={sx('display:flex;flex-direction:column;gap:4px;font-size:12px;color:#5F6B7A;min-width:0;max-width:100%' + (movil ? ';flex:1 1 100%' : ''))}>Cambiar de caso
+          <select className="sel" value={caso.id} onChange={e => abrir(e.target.value)} aria-label="Abrir otro caso" style={movil ? sx('width:100%') : undefined}>
             {casos.map(c => <option key={c.id} value={c.id}>{c.id} · {c.tipo} · {c.ubicacion.split(' km')[0]} · {c.cliente}{c.esPrincipal ? ' · en curso' : c.step >= 6 ? ' · cerrado' : ''}</option>)}
           </select>
         </label>
@@ -169,7 +173,7 @@ export default function Reaccion() {
           </ol>
           <label style={sx('display:flex;flex-direction:column;gap:6px;font-size:12px;color:#5F6B7A')}>Nueva entrada
             <span style={sx('display:flex;gap:8px')}>
-              <input type="text" placeholder="Acción, contacto o hallazgo" value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addEntry() } }} style={sx("flex:1;min-height:44px;background:#F3F5F8;border:1px solid #D5DBE3;border-radius:8px;color:#0D1D41;padding:0 12px;font:400 14px 'Montserrat',sans-serif")} />
+              <input type="text" placeholder="Acción, contacto o hallazgo" value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addEntry() } }} style={sx("flex:1;min-width:0;min-height:44px;background:#F3F5F8;border:1px solid #D5DBE3;border-radius:8px;color:#0D1D41;padding:0 12px;font:400 14px 'Montserrat',sans-serif")} />
               <button type="button" className="btn" onClick={addEntry} disabled={!draft.trim()} style={!draft.trim() ? sx('opacity:.5;cursor:default') : undefined}>Registrar</button>
             </span>
           </label>
@@ -223,7 +227,9 @@ export default function Reaccion() {
 
       <Section titulo="Mapa de calor · incidentes por carretera y horario" ayuda={`${totalHeat} incidentes del trimestre. Alimenta el factor de riesgo del cotizador. Haz clic en una celda para ver los casos.`} plegable abierto={false}>
         <div style={sx('overflow-x:auto')}>
-          <div style={sx('display:grid;grid-template-columns:200px repeat(6,minmax(64px,1fr));gap:4px;min-width:640px;font-size:13px')}>
+          <div style={sx(movil
+            ? 'display:grid;grid-template-columns:136px repeat(6,minmax(40px,1fr));gap:4px;min-width:max(400px,100%);font-size:13px'
+            : 'display:grid;grid-template-columns:200px repeat(6,minmax(64px,1fr));gap:4px;min-width:640px;font-size:13px')}>
             <span></span>{FRANJAS.map(f => <span key={f} className="lbl" style={sx('text-align:center')}>{f}</span>)}
             {heat.map(([road, vs]) => [
               <span key={road} style={sx('display:flex;align-items:center')}>{road}</span>,

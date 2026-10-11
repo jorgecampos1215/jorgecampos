@@ -2,6 +2,7 @@ import { Logo } from '../components/Logo'
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { ROUTES } from '../lib/routes'
 import { useStore, actions } from '../lib/store'
 import { useToast } from '../components/ui'
@@ -71,6 +72,8 @@ const ICO = {
 
 export default function PortalColaborador() {
   const toast = useToast()
+  // Celular: márgenes de 16px (como el Shell) y los recibos como lista de tarjetas en vez de tabla.
+  const movil = useViewport() === 'movil'
   const [tab, setTab] = useState<Tab>('home')
   const [docs, setDocs] = useState(DOCS0)
   const [adjunto, setAdjunto] = useState('')
@@ -136,7 +139,7 @@ export default function PortalColaborador() {
     <div style={sx("font-family:'Montserrat',system-ui,sans-serif;color:#0D1D41;background:#F6F7F9;min-height:100vh")}>
       <style>{CSS}</style>
       <header style={sx('background:#FFFFFF;border-bottom:1px solid #E4E8ED')}>
-        <div style={sx('max-width:1120px;margin:0 auto;padding:14px 24px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between')}>
+        <div style={sx('max-width:1120px;margin:0 auto;padding:' + (movil ? '12px 16px' : '14px 24px') + ';display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between')}>
           <button type="button" onClick={() => ir('home')} style={sx('display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;cursor:pointer;font-family:inherit;color:inherit')}>
             <Logo height={24} />
             <span style={sx("font-family:'Montserrat',sans-serif;font-weight:700;font-size:19px")}>AI27</span>
@@ -154,7 +157,7 @@ export default function PortalColaborador() {
         </div>
       </header>
 
-      <main style={sx('max-width:1120px;margin:0 auto;padding:28px 24px 56px;box-sizing:border-box;display:flex;flex-direction:column;gap:22px')}>
+      <main style={sx('max-width:1120px;margin:0 auto;padding:' + (movil ? '20px 16px 40px' : '28px 24px 56px') + ';box-sizing:border-box;display:flex;flex-direction:column;gap:' + (movil ? 18 : 22) + 'px')}>
         <PageHeader seccion={`Mi portal · ${YO.puesto} · ${YO.area}`} titulo={tab === 'home' ? `Hola, ${YO.nombre.split(' ')[0]}` : T.find(t => t[0] === tab)![1]} descripcion={explicacion[tab]}
           accion={tab === 'vac' ? undefined : { label: 'Pedir vacaciones', onClick: () => ir('vac', 'Vacaciones') }}
           secundarias={tab !== 'home' ? <button type="button" className="btn" onClick={() => ir('home')}>Volver al inicio</button> : undefined} />
@@ -239,7 +242,24 @@ export default function PortalColaborador() {
           </div>
         )}
 
-        {tab === 'pay' && (
+        {tab === 'pay' && movil && (
+          /* Celular: una tarjeta por quincena con los mismos datos y botones que la tabla */
+          <Section titulo="Mis recibos de nómina" ayuda="PDF para consultarlo o imprimirlo; XML es el CFDI timbrado para trámites.">
+            {recibos.map(p => (
+              <div key={p.periodo} style={sx('display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid #EEF1F4;font-size:14px')}>
+                <span style={sx('display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap')}><span style={sx('font-weight:500')}>{p.periodo}</span><span style={sx('color:#5F6B7A;font-size:13px')}>Fecha de pago <span className="mono">{p.pago}</span></span></span>
+                <div style={sx('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;--sx-fijo:1')}>
+                  <span style={sx('display:flex;flex-direction:column;gap:2px;min-width:0')}><span className="lbl" style={sx('font-size:11px')}>Percepciones</span><span className="mono" style={sx('font-size:13px')}>{money(p.percepciones)}</span></span>
+                  <span style={sx('display:flex;flex-direction:column;gap:2px;min-width:0')}><span className="lbl" style={sx('font-size:11px')}>Deducciones</span><span className="mono" style={sx('font-size:13px')}>{money(p.deducciones)}</span></span>
+                  <span style={sx('display:flex;flex-direction:column;gap:2px;min-width:0')}><span className="lbl" style={sx('font-size:11px')}>Neto</span><span className="mono" style={sx('font-size:13px;font-weight:500')}>{money(p.neto)}</span></span>
+                </div>
+                <span style={sx('display:flex;gap:8px;flex-wrap:wrap')}><button type="button" className="btn" style={sx('min-height:36px;padding:0 12px')} onClick={() => { descargarReciboPDF(p); toast(`Recibo PDF descargado · ${p.periodo}`) }}>PDF</button><button type="button" className="btn" style={sx('min-height:36px;padding:0 12px')} onClick={() => { descargarReciboXML(p); toast(`CFDI XML descargado · ${p.periodo}`) }}>XML</button></span>
+              </div>
+            ))}
+          </Section>
+        )}
+
+        {tab === 'pay' && !movil && (
           <Section titulo="Mis recibos de nómina" ayuda="PDF para consultarlo o imprimirlo; XML es el CFDI timbrado para trámites." style="padding:22px 10px 4px">
             <div style={sx('overflow-x:auto')}>
               <table className="tbl">

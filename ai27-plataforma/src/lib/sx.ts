@@ -59,10 +59,14 @@ function columnasIguales(valor: string): number | null {
 
 function adaptar(s: Record<string, string>, modo: Modo) {
   const movil = modo === 'movil'
+  const pxDe = (v?: string) => { const m = v ? /^(\d+(?:\.\d+)?)px$/.exec(v) : null; return m ? Number(m[1]) : null }
+
+  // Carrusel deliberado: rejilla + min-width grande dentro de un contenedor con scroll (kanban, agenda). Se deja tal cual.
+  const carrusel = !!s.gridTemplateColumns && (pxDe(s.minWidth) ?? 0) >= 360
 
   // Rejillas de columnas iguales
   const cols = s.gridTemplateColumns
-  if (cols) {
+  if (cols && !carrusel) {
     const n = columnasIguales(cols)
     if (n && n >= 2) {
       if (movil) s.gridTemplateColumns = n >= 4 ? 'repeat(2,minmax(0,1fr))' : 'minmax(0,1fr)'
@@ -70,8 +74,9 @@ function adaptar(s: Record<string, string>, modo: Modo) {
     }
   }
 
-  // Filas flex: que envuelvan en celular (salvo columnas, carruseles con scroll o filas marcadas nowrap)
-  if (movil && (s.display === 'flex' || s.display === 'inline-flex') && !s.flexWrap && !/column/.test(s.flexDirection ?? '') && !s.overflowX && !/auto|scroll/.test(s.overflow ?? '') && s.whiteSpace !== 'nowrap') {
+  // Filas flex: que envuelvan en celular. Excepciones: columnas, carruseles con scroll, filas nowrap y el patrón
+  // "título a la izquierda · acción a la derecha" (justify-content:space-between), donde el botón de cerrar debe quedarse en su fila.
+  if (movil && (s.display === 'flex' || s.display === 'inline-flex') && !s.flexWrap && !/column/.test(s.flexDirection ?? '') && !s.overflowX && !/auto|scroll/.test(s.overflow ?? '') && s.whiteSpace !== 'nowrap' && s.justifyContent !== 'space-between') {
     s.flexWrap = 'wrap'
   }
 
@@ -81,7 +86,7 @@ function adaptar(s: Record<string, string>, modo: Modo) {
     const px = /^(\d+(?:\.\d+)?)px$/.exec(w)
     if (px && Number(px[1]) >= 360) s.width = `min(${w},100%)`
   }
-  if (s.minWidth) {
+  if (s.minWidth && !carrusel) {
     const px = /^(\d+(?:\.\d+)?)px$/.exec(s.minWidth)
     if (px && Number(px[1]) >= 360 && s.display !== 'table' && !s.borderCollapse) s.minWidth = movil ? '0' : `min(${s.minWidth},100%)`
   }

@@ -4,6 +4,7 @@ import { Shell } from '../components/Shell'
 import { Nota, PageHeader, Section } from '../components/Page'
 import { Field, Modal, Pager, btnPriStyle, btnStyle, inputStyle, usePagination, useToast } from '../components/ui'
 import { sx, fmtMXN } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { ROUTES } from '../lib/routes'
 import { actions, useStore } from '../lib/store'
 import { CLIENTES, custodios, unidades, type TipoServicio } from '../data/seed'
@@ -31,6 +32,8 @@ a{color:#3448A8}a:hover{color:#0D1D41}
 .tabbtn{background:#FFFFFF}.tabbtn[aria-selected=true]{background:#E9EDFB;border-color:#475CC7;color:#0D1D41}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:#FFFFFF;border-left:1px solid #E4E8ED;box-shadow:-12px 0 40px rgba(18,24,33,.14);z-index:850;display:flex;flex-direction:column;overflow:auto;font-family:'Montserrat',system-ui,sans-serif;color:#0D1D41}
 .backdrop{position:fixed;inset:0;background:rgba(18,24,33,.18);z-index:840}
+/* Pantallas angostas (tablet y escritorio de 1024px): celdas más compactas y Cliente / Ruta en dos líneas para que las 6 columnas quepan sin cortar el estatus. */
+@media (max-width:1100px){.tbl th,.tbl td{padding-left:8px;padding-right:8px}.tbl td.envuelve{white-space:normal}.tbl td.ruta{min-width:120px}}
 `
 
 type Tab = 'all' | TipoServicio
@@ -104,6 +107,8 @@ const FORM0 = { cliente: 'Alpura', tipo: 'Por evento' as TipoServicio, origen: '
 
 export default function Servicios() {
   const toast = useToast()
+  // Celular: la tabla se vuelve lista de tarjetas y el cajón de detalle ocupa toda la pantalla.
+  const movil = useViewport() === 'movil'
   const creados = useStore(s => s.servicios)
   const clientesNuevos = useStore(s => s.clientesNuevos ?? [])
   const [tab, setTab] = useState<Tab>('all')
@@ -210,7 +215,8 @@ export default function Servicios() {
       <section aria-label="Sugerencia de la IA" style={sx('display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:#F0F3FD;border:1px solid #C7D0F2;border-radius:12px;padding:12px 18px')}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3448A8" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true" style={sx('flex:none')}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg>
         <div style={sx('flex:1 1 360px;display:flex;flex-direction:column;gap:2px;min-width:0')}>
-          <span style={sx('font-weight:600;font-size:14px')}>La IA recomienda avisar a Farmacéutica Orión: <button type="button" onClick={() => { cambiarVista('Activos'); seleccionar('SRV-24822') }} style={sx('background:none;border:0;padding:0;font:inherit;color:#3448A8;cursor:pointer;text-decoration:underline')}>SRV-24822</button> va 40 min tarde.</span>
+          {/* Celular: el botón en línea no debe heredar los 44px de alto de global.css o abre el interlineado de la frase. */}
+          <span style={sx('font-weight:600;font-size:14px')}>La IA recomienda avisar a Farmacéutica Orión: <button type="button" onClick={() => { cambiarVista('Activos'); seleccionar('SRV-24822') }} style={sx('background:none;border:0;padding:0;font:inherit;color:#3448A8;cursor:pointer;text-decoration:underline' + (movil ? ';min-height:0' : ''))}>SRV-24822</button> va 40 min tarde.</span>
           <span style={sx('font-size:13px;color:#3E4A59')}>Tráfico en Querétaro. Avisar ahora mantiene la puntualidad de entregas en 96.4%.</span>
         </div>
         <figure style={sx('margin:0;display:flex;flex-direction:column;gap:2px')}>
@@ -238,7 +244,39 @@ export default function Servicios() {
             ))}
           </div>
           {fMon && <button type="button" className="pill p-warn" style={sx('border:0;cursor:pointer;font-family:inherit')} onClick={() => { setFMon(null); pg.setPage(0) }}>Monitorista: {fMon} ×</button>}
+          {/* En celular la tabla se muestra como tarjetas y el orden se elige aquí (en escritorio se ordena desde el encabezado). */}
+          {movil && (
+            <select aria-label="Ordenar por" value={sort ? `${sort.k}:${sort.dir}` : ''} onChange={e => { const [k, d] = e.target.value.split(':'); setSort(k ? { k: k as keyof FilaServicio, dir: d === '-1' ? -1 : 1 } : null); pg.setPage(0) }} style={sx(selectSt + ';margin-left:auto')}>
+              <option value="">Ordenar</option>
+              {COLS.map(([k, label]) => [<option key={k + ':1'} value={`${k}:1`}>{label} ▲</option>, <option key={k + ':-1'} value={`${k}:-1`}>{label} ▼</option>])}
+            </select>
+          )}
         </div>
+        {movil ? (
+          <div style={sx('display:flex;flex-direction:column;gap:8px')} aria-label="Servicios">
+            {rows.slice(pg.from, pg.to).map(x => {
+              const activa = detalleAbierto && x.id === r.id
+              return (
+                <button key={x.id} type="button" className="srv-row" aria-pressed={activa} title={`Ver detalle de ${x.id}`} onClick={() => seleccionar(x.id)}
+                  style={sx('display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;border:1px solid #E4E8ED;border-radius:8px;padding:10px 12px;font:inherit;color:inherit;cursor:pointer;box-sizing:border-box;background:' + (x.status === 'Con incidente' ? '#FFF5F5' : activa ? '#F0F3FD' : '#FFFFFF') + (activa ? ';border-color:#475CC7' : ''))}>
+                  <span style={sx('display:flex;flex-wrap:nowrap;justify-content:space-between;gap:10px;align-items:flex-start')}>
+                    <span style={sx('display:flex;flex-direction:column;gap:2px;min-width:0')}>
+                      <span className="mono" style={sx('font-size:12px;color:#5F6B7A')}>{x.id}</span>
+                      <span style={sx('font-weight:500;overflow-wrap:anywhere')}>{x.client}{x.nuevo && <span className="pill p-warn" style={sx('margin-left:8px')}>Nuevo</span>}</span>
+                    </span>
+                    <span className={ST[x.status]}>{x.status}</span>
+                  </span>
+                  <span style={sx('display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:13px;color:#3E4A59')}>
+                    <span className="pill p-mute">{x.type}</span>
+                    <span style={sx('min-width:0;overflow-wrap:anywhere')}>{x.route}</span>
+                    <span className="mono" style={sx('margin-left:auto;color:#0D1D41')}>{x.fee}</span>
+                  </span>
+                </button>
+              )
+            })}
+            {rows.length === 0 && <span style={sx('padding:24px 12px;color:#5F6B7A;text-align:center;font-size:14px')}>Sin servicios con estos filtros. Prueba con otro tipo, otro periodo o borra la búsqueda.</span>}
+          </div>
+        ) : (
         <div style={sx('overflow-x:auto;margin:0 -10px')}>
           <table className="tbl">
             <thead><tr>{COLS.map(([k, label]) => <th key={k} aria-sort={sort?.k === k ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'} onClick={() => ordenar(k)} title="Ordenar">{label}{sort?.k === k ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>)}</tr></thead>
@@ -247,13 +285,14 @@ export default function Servicios() {
                 <tr key={x.id} className="srv-row" aria-selected={detalleAbierto && x.id === r.id} tabIndex={0}
                   onClick={() => seleccionar(x.id)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seleccionar(x.id) } }}
                   style={sx(detalleAbierto && x.id === r.id ? (x.status === 'Con incidente' ? 'background:#FFF5F5' : 'background:#F0F3FD') : x.status === 'Con incidente' ? 'background:#FFF5F5' : '')}>
-                  <td className="mono">{x.id}</td><td>{x.client}{x.nuevo && <span className="pill p-warn" style={sx('margin-left:8px')}>Nuevo</span>}</td><td><span className="pill p-mute">{x.type}</span></td><td>{x.route}</td><td className="mono">{x.fee}</td><td><span className={ST[x.status]}>{x.status}</span></td>
+                  <td className="mono">{x.id}</td><td className="envuelve">{x.client}{x.nuevo && <span className="pill p-warn" style={sx('margin-left:8px')}>Nuevo</span>}</td><td><span className="pill p-mute">{x.type}</span></td><td className="envuelve ruta">{x.route}</td><td className="mono">{x.fee}</td><td><span className={ST[x.status]}>{x.status}</span></td>
                 </tr>
               ))}
               {rows.length === 0 && <tr><td colSpan={6} style={sx('padding:24px 12px;color:#5F6B7A;text-align:center;white-space:normal')}>Sin servicios con estos filtros. Prueba con otro tipo, otro periodo o borra la búsqueda.</td></tr>}
             </tbody>
           </table>
         </div>
+        )}
         <Pager {...pg} />
       </Section>
 
@@ -274,8 +313,8 @@ export default function Servicios() {
       {detalleAbierto && (
         <>
           <div className="backdrop" onClick={() => setDetalleAbierto(false)} />
-          <aside className="drawer" role="dialog" aria-modal="true" aria-label={`Detalle de ${r.id}`}>
-            <div style={sx('display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:18px 22px;border-bottom:1px solid #EEF1F4')}>
+          <aside className="drawer" role="dialog" aria-modal="true" aria-label={`Detalle de ${r.id}`} style={movil ? sx('left:0;width:auto;border-left:0') : undefined}>
+            <div style={sx(`display:flex;flex-wrap:nowrap;justify-content:space-between;gap:12px;align-items:flex-start;padding:${movil ? '14px 16px' : '18px 22px'};border-bottom:1px solid #EEF1F4`)}>
               <div style={sx('display:flex;flex-direction:column;gap:4px;min-width:0')}>
                 <span className="lbl">{r.id} · {r.type}</span>
                 <h2 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600")}>{r.client}</h2>
@@ -286,11 +325,12 @@ export default function Servicios() {
                 <button type="button" onClick={() => setDetalleAbierto(false)} aria-label="Cerrar" style={sx('width:32px;height:32px;border-radius:8px;border:1px solid #D5DBE3;background:#F3F5F8;color:#3E4A59;font-size:16px;cursor:pointer')}>×</button>
               </div>
             </div>
-            <div style={sx('padding:18px 22px;display:flex;flex-direction:column;gap:18px')}>
+            <div style={sx(`padding:${movil ? '16px' : '18px 22px'};display:flex;flex-direction:column;gap:18px`)}>
               <div style={sx('display:flex;gap:6px;flex-wrap:wrap')}>
                 {etapas(r).map(e => <span key={e.s} className={e.cls}>{e.s}</span>)}
               </div>
-              <dl style={sx('margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px;font-size:14px')}>
+              {/* Celular: sx() dejaría la ficha en una columna; con auto-fit caben dos datos por fila en 390px. */}
+              <dl style={sx(`margin:0;display:grid;grid-template-columns:${movil ? 'repeat(auto-fit,minmax(min(150px,100%),1fr))' : 'repeat(2,minmax(0,1fr))'};gap:14px 20px;font-size:14px`)}>
                 {d.dl.map(([k, v, mono]) => (
                   <div key={k} style={sx('min-width:0')}><dt className="lbl">{k}</dt><dd className={mono ? 'mono' : undefined} style={sx('margin:4px 0 0;overflow-wrap:anywhere')}>{v}</dd></div>
                 ))}

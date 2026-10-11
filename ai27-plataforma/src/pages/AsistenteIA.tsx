@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Shell } from '../components/Shell'
 import { PageHeader, Section, Nota } from '../components/Page'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { ROUTES } from '../lib/routes'
 import { Pager, usePagination, useToast } from '../components/ui'
 import { descargarCSV } from '../data/dashboard'
@@ -101,6 +102,7 @@ export default function AsistenteIA() {
   const navigate = useNavigate()
   const toast = useToast()
   const pins = usePins()
+  const movil = useViewport() === 'movil'
   const [turnos, setTurnos] = useState<Turno[]>([{ id: 0, asked: null, p: P[0] }])
   const [input, setInput] = useState('')
   const last = turnos[turnos.length - 1]
@@ -142,7 +144,8 @@ export default function AsistenteIA() {
         </div>
       </Section>
 
-      <section className="card" aria-label="Conversación" style={sx('display:flex;flex-direction:column;gap:18px;padding:24px;border-color:#C7D0F2')}>
+      {/* Celular: menos margen interior para que las gráficas y tarjetas de respuesta aprovechen el ancho. */}
+      <section className="card" aria-label="Conversación" style={sx(`display:flex;flex-direction:column;gap:18px;padding:${movil ? 16 : 24}px;border-color:#C7D0F2`)}>
         <form style={sx('display:flex;gap:10px;flex-wrap:wrap')} onSubmit={e => { e.preventDefault(); ask() }}>
           <label style={sx('flex:1 1 320px;display:flex')}><span style={sx('position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)')}>Tu pregunta</span><input type="text" value={input} onChange={e => setInput(e.target.value)} placeholder="Escribe tu pregunta. Ej. ¿cuántos custodios hay libres en Bajío?" style={sx("flex:1;min-height:48px;background:#F3F5F8;border:1px solid #D5DBE3;border-radius:10px;color:#0D1D41;padding:0 14px;font:400 15px 'Montserrat',sans-serif")} /></label>
           <button type="submit" className="btn btn-pri" style={sx('min-height:48px')}>Preguntar</button>
@@ -173,7 +176,20 @@ function csvDe(p: Prompt): string {
   return [[p.q], [p.a], [], ...rows].map(r => r.map(esc).join(',')).join('\n')
 }
 
+/** Fila de una gráfica de barras: escritorio = etiqueta · barra · valor en tres columnas; celular = etiqueta y valor arriba, barra a lo ancho abajo. */
+const filaBarra = (movil: boolean, anchoValor: number) => movil
+  ? 'display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"k v" "b b";gap:4px 12px;align-items:center;font-size:14px'
+  : `display:grid;grid-template-columns:170px minmax(0,1fr) ${anchoValor}px;gap:12px;align-items:center;font-size:14px`
+
 function Respuesta({ turno, pinned, onPin, onExport, navigate }: { turno: Turno; pinned: boolean; onPin: () => void; onExport: () => void; navigate: ReturnType<typeof useNavigate> }) {
+  const modo = useViewport()
+  const movil = modo === 'movil'
+  const figura = `margin:0;background:#F7F9FB;border:1px solid #E4E8ED;border-radius:10px;padding:${movil ? 14 : 18}px;display:flex;flex-direction:column;gap:12px`
+  // Gráfica de líneas: en celular el lienzo es más angosto (340 en vez de 640) para que las etiquetas se lean al escalar al ancho de la tarjeta.
+  const ancho = movil ? 340 : 640
+  const paso = (ancho - 80) / 5
+  const xs = (n: number) => 40 + n * paso
+  const fz = movil ? 15 : 11, fz2 = movil ? 16 : 12, radio = movil ? 5 : 4
   const cur = turno.p
   const max = cur.data ? Math.max(...cur.data.map(d => d[1])) : 1
   const bars = (cur.data || []).map(([k, v], j) => ({ k, v: cur.fmt!(v), bar: 'height:100%;width:' + Math.round(v / max * 100) + '%;background:' + (cur.kind === 'bars' && cur.to === ROUTES.Flotilla && v < 6.5 ? '#D9534F' : (j === 0 && cur.to === ROUTES.Finanzas ? '#3448A8' : '#475CC7')) }))
@@ -183,6 +199,11 @@ function Respuesta({ turno, pinned, onPin, onExport, navigate }: { turno: Turno;
   const pg = usePagination(documentos.docs.length, 25)
   const zona = cur.kind === 'zona' ? disponiblesEnZona(cur.zona!) : null
   const pgz = usePagination(zona?.disp.length ?? 0, 25)
+  const avatar = (
+    <span style={sx(`width:${movil ? 28 : 36}px;height:${movil ? 28 : 36}px;border-radius:50%;background:#E9EDFB;display:flex;align-items:center;justify-content:center;flex:none`)}>
+      <svg width={movil ? 15 : 18} height={movil ? 15 : 18} viewBox="0 0 24 24" fill="none" stroke="#3448A8" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg>
+    </span>
+  )
 
   return (
     <>
@@ -191,65 +212,73 @@ function Respuesta({ turno, pinned, onPin, onExport, navigate }: { turno: Turno;
         <span style={sx("font-family:'Montserrat',sans-serif;font-size:17px;font-weight:600;line-height:1.35")}>{turno.asked ?? cur.q}</span>
       </div>
 
-      <div style={sx('display:flex;gap:12px;align-items:flex-start')}>
-        <span style={sx('width:36px;height:36px;border-radius:50%;background:#E9EDFB;display:flex;align-items:center;justify-content:center;flex:none')}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3448A8" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg>
-        </span>
+      {/* Escritorio: avatar a la izquierda y la respuesta a su derecha. Celular: el avatar va junto a la etiqueta «Respuesta» y el contenido ocupa todo el ancho. */}
+      <div style={sx(movil ? 'display:flex;flex-direction:column' : 'display:flex;gap:12px;align-items:flex-start')}>
+        {!movil && avatar}
         <div style={sx('flex:1;min-width:0;display:flex;flex-direction:column;gap:16px')}>
           {turno.asked !== null && (
             <span style={sx('font-size:13px;color:#5F6B7A')}>Entendí tu pregunta como: «{cur.q}»</span>
           )}
-          <span className="lbl">Respuesta</span>
+          {movil ? <span style={sx('display:flex;gap:10px;align-items:center')}>{avatar}<span className="lbl">Respuesta</span></span> : <span className="lbl">Respuesta</span>}
           <p style={sx('margin:-10px 0 0;font-size:15px;line-height:1.6;text-wrap:pretty')}>{cur.a}</p>
 
           {cur.kind === 'bars' && (
-            <figure style={sx('margin:0;background:#F7F9FB;border:1px solid #E4E8ED;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:12px')}>
+            <figure style={sx(figura)}>
               <figcaption className="lbl">{cur.title || ''}</figcaption>
               {bars.map(b => (
-                <button type="button" className="bar-row" key={b.k} title={'Abrir ' + b.k} onClick={() => navigate(cur.to)} style={sx('display:grid;grid-template-columns:170px minmax(0,1fr) 80px;gap:12px;align-items:center;font-size:14px')}>
-                  <span>{b.k}</span>
-                  <div style={sx('height:14px;border-radius:4px;background:#EBEEF2;overflow:hidden')}><div style={sx(b.bar)}></div></div>
-                  <span className="mono" style={sx('text-align:right')}>{b.v}</span>
+                <button type="button" className="bar-row" key={b.k} title={'Abrir ' + b.k} onClick={() => navigate(cur.to)} style={sx(filaBarra(movil, 80))}>
+                  <span style={sx(movil ? 'grid-area:k' : '')}>{b.k}</span>
+                  <div style={sx('height:14px;border-radius:4px;background:#EBEEF2;overflow:hidden' + (movil ? ';grid-area:b' : ''))}><div style={sx(b.bar)}></div></div>
+                  <span className="mono" style={sx('text-align:right' + (movil ? ';grid-area:v' : ''))}>{b.v}</span>
                 </button>
               ))}
             </figure>
           )}
 
           {cur.kind === 'group' && (
-            <figure style={sx('margin:0;background:#F7F9FB;border:1px solid #E4E8ED;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:12px')}>
+            <figure style={sx(figura)}>
               <figcaption style={sx('display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap')}><span className="lbl">Incidentes por carretera · Q2 vs Q3 2026</span>
                 <span style={sx('display:flex;gap:14px;font-size:12px;color:#3E4A59')}><span style={sx('display:flex;gap:6px;align-items:center')}><span style={sx('width:10px;height:10px;border-radius:2px;background:#AEB8C4')}></span>Q2</span><span style={sx('display:flex;gap:6px;align-items:center')}><span style={sx('width:10px;height:10px;border-radius:2px;background:#3448A8')}></span>Q3</span></span>
               </figcaption>
               {groups.map(g => (
-                <button type="button" className="bar-row" key={g.k} title={'Ver incidentes en ' + g.k} onClick={() => navigate(ROUTES.Reaccion)} style={sx('display:grid;grid-template-columns:170px minmax(0,1fr) 60px;gap:12px;align-items:center;font-size:14px')}>
-                  <span>{g.k}</span>
-                  <div style={sx('display:flex;flex-direction:column;gap:3px')}><div style={sx(g.b1)}></div><div style={sx(g.b2)}></div></div>
-                  <span className="mono" style={sx('text-align:right')}>{g.v}</span>
+                <button type="button" className="bar-row" key={g.k} title={'Ver incidentes en ' + g.k} onClick={() => navigate(ROUTES.Reaccion)} style={sx(filaBarra(movil, 60))}>
+                  <span style={sx(movil ? 'grid-area:k' : '')}>{g.k}</span>
+                  <div style={sx('display:flex;flex-direction:column;gap:3px' + (movil ? ';grid-area:b' : ''))}><div style={sx(g.b1)}></div><div style={sx(g.b2)}></div></div>
+                  <span className="mono" style={sx('text-align:right' + (movil ? ';grid-area:v' : ''))}>{g.v}</span>
                 </button>
               ))}
             </figure>
           )}
 
           {cur.kind === 'line' && (
-            <figure style={sx('margin:0;background:#F7F9FB;border:1px solid #E4E8ED;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px')}>
+            <figure style={sx(figura.replace('gap:12px', 'gap:10px'))}>
               <figcaption style={sx('display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap')}><span className="lbl">Ingresos vs gastos · millones MXN</span>
                 <span style={sx('display:flex;gap:14px;font-size:12px;color:#3E4A59')}><span style={sx('display:flex;gap:6px;align-items:center')}><span style={sx('width:14px;height:3px;background:#3448A8')}></span>Ingresos</span><span style={sx('display:flex;gap:6px;align-items:center')}><span style={sx('width:14px;height:3px;background:#475CC7')}></span>Gastos</span></span>
               </figcaption>
-              <svg viewBox="0 0 640 230" role="img" aria-label="Ingresos suben de 12.1 a 14.1 millones y gastos de 8.6 a 9.7 millones entre abril y septiembre" style={sx('width:100%;height:auto;display:block;cursor:pointer')} onClick={() => navigate(ROUTES.Finanzas)}>
-                <g stroke="#E4E8ED" strokeWidth="1"><path d="M30 200H620M30 148.6H620M30 97.1H620M30 45.7H620"></path></g>
-                <g fontFamily="IBM Plex Mono, monospace" fontSize="11" fill="#5F6B7A"><text x="0" y="204">8</text><text x="0" y="152">10</text><text x="0" y="101">12</text><text x="0" y="49">14</text></g>
-                <polyline points={LINEA.map(([, i], n) => `${40 + n * 112},${200 - (i - 8) * 25.7}`).join(' ')} fill="none" stroke="#3448A8" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"></polyline>
-                <polyline points={LINEA.map(([, , g], n) => `${40 + n * 112},${200 - (g - 8) * 25.7}`).join(' ')} fill="none" stroke="#475CC7" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"></polyline>
-                <g fill="#3448A8">{LINEA.map(([m, i], n) => <circle key={m} cx={40 + n * 112} cy={200 - (i - 8) * 25.7} r="4"><title>{m}: ingresos ${i}M</title></circle>)}</g>
-                <g fill="#475CC7">{LINEA.map(([m, , g], n) => <circle key={m} cx={40 + n * 112} cy={200 - (g - 8) * 25.7} r="4"><title>{m}: gastos ${g}M</title></circle>)}</g>
-                <g fontFamily="IBM Plex Sans, sans-serif" fontSize="12" fill="#3E4A59" textAnchor="middle">{LINEA.map(([m], n) => <text key={m} x={40 + n * 112} y="224">{m}</text>)}</g>
-                <g fontFamily="IBM Plex Mono, monospace" fontSize="11" textAnchor="middle"><text x="600" y="32" fill="#0D1D41">14.1</text><text x="600" y="145" fill="#1E6488">9.7</text></g>
+              <svg viewBox={`0 0 ${ancho} 230`} role="img" aria-label="Ingresos suben de 12.1 a 14.1 millones y gastos de 8.6 a 9.7 millones entre abril y septiembre" style={sx('width:100%;height:auto;display:block;cursor:pointer')} onClick={() => navigate(ROUTES.Finanzas)}>
+                <g stroke="#E4E8ED" strokeWidth="1"><path d={`M30 200H${ancho - 20}M30 148.6H${ancho - 20}M30 97.1H${ancho - 20}M30 45.7H${ancho - 20}`}></path></g>
+                <g fontFamily="IBM Plex Mono, monospace" fontSize={fz} fill="#5F6B7A"><text x="0" y="204">8</text><text x="0" y="152">10</text><text x="0" y="101">12</text><text x="0" y="49">14</text></g>
+                <polyline points={LINEA.map(([, i], n) => `${xs(n)},${200 - (i - 8) * 25.7}`).join(' ')} fill="none" stroke="#3448A8" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"></polyline>
+                <polyline points={LINEA.map(([, , g], n) => `${xs(n)},${200 - (g - 8) * 25.7}`).join(' ')} fill="none" stroke="#475CC7" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"></polyline>
+                <g fill="#3448A8">{LINEA.map(([m, i], n) => <circle key={m} cx={xs(n)} cy={200 - (i - 8) * 25.7} r={radio}><title>{m}: ingresos ${i}M</title></circle>)}</g>
+                <g fill="#475CC7">{LINEA.map(([m, , g], n) => <circle key={m} cx={xs(n)} cy={200 - (g - 8) * 25.7} r={radio}><title>{m}: gastos ${g}M</title></circle>)}</g>
+                <g fontFamily="IBM Plex Sans, sans-serif" fontSize={fz2} fill="#3E4A59" textAnchor="middle">{LINEA.map(([m], n) => <text key={m} x={xs(n)} y="224">{m}</text>)}</g>
+                <g fontFamily="IBM Plex Mono, monospace" fontSize={fz} textAnchor="middle"><text x={ancho - 40} y="32" fill="#0D1D41">14.1</text><text x={ancho - 40} y="145" fill="#1E6488">9.7</text></g>
               </svg>
             </figure>
           )}
 
           {cur.kind === 'table' && (
             <div style={sx('overflow-x:auto;background:#F7F9FB;border:1px solid #E4E8ED;border-radius:10px;padding:8px')}>
+              {movil ? (
+                <div style={sx('display:flex;flex-direction:column;gap:8px')}>
+                  {filas.map(r => (
+                    <Tarjeta key={r.zona} titulo={r.zona} title={`Abrir asignación · ${r.zona}`} onClick={() => navigate(ROUTES.AsignacionIA)}
+                      etiqueta={<span className={r.diff < 0 ? 'pill p-bad' : r.diff === 0 ? 'pill p-warn' : 'pill p-ok'}>{(r.diff > 0 ? '+' : '') + r.diff}</span>}
+                      datos={[['Disponibles', <span className="mono">{r.disponibles}</span>], ['Requeridos', <span className="mono">{r.requeridos}</span>]]} />
+                  ))}
+                </div>
+              ) : (
               <table className="tbl">
                 <thead><tr>{th('zona', 'Zona')}{th('disponibles', 'Disponibles')}{th('requeridos', 'Requeridos')}{th('diff', 'Diferencia')}</tr></thead>
                 <tbody>
@@ -258,11 +287,22 @@ function Respuesta({ turno, pinned, onPin, onExport, navigate }: { turno: Turno;
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
           )}
 
           {cur.kind === 'docs' && (
             <div style={sx('overflow-x:auto;background:#F7F9FB;border:1px solid #E4E8ED;border-radius:10px;padding:8px')}>
+              {movil ? (
+                <div style={sx('display:flex;flex-direction:column;gap:8px')}>
+                  {documentos.docs.slice(pg.from, pg.to).map((d, i) => (
+                    <Tarjeta key={i} title={`Abrir expediente de ${d.custodio.nombre}`} onClick={() => navigate(ROUTES.Custodios)}
+                      titulo={<>{d.custodio.nombre} <span className="mono" style={sx('color:#5F6B7A;font-size:12px;font-weight:400;white-space:nowrap')}>{d.custodio.id}</span></>}
+                      etiqueta={<span className={d.doc.estado === 'bad' ? 'pill p-bad' : 'pill p-warn'}>{d.doc.v}</span>}
+                      datos={[['Zona', d.custodio.zona], ['Documento', d.doc.k]]} />
+                  ))}
+                </div>
+              ) : (
               <table className="tbl">
                 <thead><tr><th>Custodio</th><th>Zona</th><th>Documento</th><th>Vence</th></tr></thead>
                 <tbody>
@@ -271,12 +311,23 @@ function Respuesta({ turno, pinned, onPin, onExport, navigate }: { turno: Turno;
                   ))}
                 </tbody>
               </table>
+              )}
               <Pager {...pg} />
             </div>
           )}
 
           {cur.kind === 'zona' && zona && (
             <div style={sx('overflow-x:auto;background:#F7F9FB;border:1px solid #E4E8ED;border-radius:10px;padding:8px')}>
+              {movil ? (
+                <div style={sx('display:flex;flex-direction:column;gap:8px')}>
+                  {zona.disp.slice(pgz.from, pgz.to).map(c => (
+                    <Tarjeta key={c.id} title={`Abrir expediente de ${c.nombre}`} onClick={() => navigate(ROUTES.Custodios)}
+                      titulo={<>{c.nombre} <span className="mono" style={sx('color:#5F6B7A;font-size:12px;font-weight:400;white-space:nowrap')}>{c.id}</span></>}
+                      etiqueta={<span className={c.docs === 'Al día' ? 'pill p-ok' : 'pill p-warn'}>{c.docs}</span>}
+                      datos={[['Base', c.base], ['Calificación', <span className="mono">{c.calificacion.toFixed(1)}</span>], ['Horas semana', <span className="mono">{c.horasSemana}</span>]]} />
+                  ))}
+                </div>
+              ) : (
               <table className="tbl">
                 <thead><tr><th>Custodio</th><th>Base</th><th>Calificación</th><th>Horas semana</th><th>Documentos</th></tr></thead>
                 <tbody>
@@ -285,6 +336,7 @@ function Respuesta({ turno, pinned, onPin, onExport, navigate }: { turno: Turno;
                   ))}
                 </tbody>
               </table>
+              )}
               <Pager {...pgz} />
             </div>
           )}
@@ -297,5 +349,20 @@ function Respuesta({ turno, pinned, onPin, onExport, navigate }: { turno: Turno;
         </div>
       </div>
     </>
+  )
+}
+
+/** Fila de tabla vista como tarjeta (celular): título y etiqueta en la primera línea; los demás datos abajo, en una línea que envuelve. */
+function Tarjeta({ titulo, etiqueta, datos, title, onClick }: { titulo: ReactNode; etiqueta?: ReactNode; datos: [string, ReactNode][]; title?: string; onClick?: () => void }) {
+  return (
+    <button type="button" title={title} onClick={onClick} style={sx('display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;background:#FFFFFF;border:1px solid #E4E8ED;border-radius:8px;padding:10px 12px;font:inherit;color:inherit;cursor:pointer;box-sizing:border-box')}>
+      <span style={sx('display:flex;flex-wrap:nowrap;justify-content:space-between;gap:10px;align-items:flex-start')}>
+        <span style={sx('font-weight:500;font-size:14px;min-width:0;overflow-wrap:anywhere')}>{titulo}</span>
+        {etiqueta}
+      </span>
+      <span style={sx('display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:#3E4A59')}>
+        {datos.map(([k, v]) => <span key={k} style={sx('display:inline-flex;gap:5px;align-items:baseline')}><span className="lbl" style={sx('font-size:10px')}>{k}</span>{v}</span>)}
+      </span>
+    </button>
   )
 }

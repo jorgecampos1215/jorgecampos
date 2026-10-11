@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Shell } from '../components/Shell'
 import { PageHeader, Pasos, Section, Nota } from '../components/Page'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { ROUTES } from '../lib/routes'
 import { Modal, useToast, btnStyle, btnPriStyle } from '../components/ui'
 import { simularEventos, type EventoTelemetria, type TipoEvento } from '../lib/telemetria'
@@ -91,6 +92,8 @@ const FEED_TITULO: Record<Cat, string> = { all: 'Eventos de telemetría', separa
 export default function Monitoreo() {
   const navigate = useNavigate()
   const toast = useToast()
+  // Celular: contadores a 2 columnas, mapa con scroll horizontal (para que ciudades y marcadores sigan legibles) y detalle del evento más compacto.
+  const movil = useViewport() === 'movil'
   const [src, setSrc] = useState<Src>('all')
   const [cat, setCat] = useState<Cat>('all')
   const [feedKey, setFeedKey] = useState(0) // > 0 cuando un contador pidió abrir el feed
@@ -182,7 +185,7 @@ export default function Monitoreo() {
         <Link className="btn" to={ROUTES.Reaccion} onClick={() => toast('Escalado a Incidentes · unidad R-03 pre-alertada', 'warn')}>Escalar a Incidentes</Link>
       </section>
 
-      <section aria-label="Contadores de alertas" style={sx('display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:12px')}>
+      <section aria-label="Contadores de alertas" style={sx('display:grid;grid-template-columns:repeat(auto-fit,minmax(min(' + (movil ? 140 : 200) + 'px,100%),1fr));gap:12px')}>
         {kpiBtn('all', 'Alertas abiertas', alertasAbiertas.length, `${sev.crit} crítica${sev.crit === 1 ? '' : 's'} · ${sev.alta} alta${sev.alta === 1 ? '' : 's'} · ${sev.media} media${sev.media === 1 ? '' : 's'}`)}
         {kpiBtn('separacion', 'Separación custodio–tráiler', separacion.length, 'Custodio a más de 1 km por más de 3 min')}
         {kpiBtn('senal', 'Sin señal', sinSenal.length, `${sinSenal.filter(e => e.src === 'Ruptela').length} Ruptela · ${sinSenal.filter(e => e.src === 'Samsara').length} Samsara`)}
@@ -203,7 +206,10 @@ export default function Monitoreo() {
               ))}
             </div>
           </div>
-          <svg viewBox="0 0 900 560" role="img" aria-label={`Mapa de ${unidades.length} rutas activas`} style={sx('width:100%;height:auto;display:block;background:#F7F9FB')}>
+          {/* En celular el mapa mide al menos 640px y se desplaza en horizontal: a 360px los marcadores no se pueden tocar ni leer. */}
+          {movil && <span style={sx('font-size:12px;color:#5F6B7A')}>Desliza el mapa hacia los lados para recorrer todo el país →</span>}
+          <div style={sx(movil ? 'overflow-x:auto;-webkit-overflow-scrolling:touch' : '')}>
+          <svg viewBox="0 0 900 560" role="img" aria-label={`Mapa de ${unidades.length} rutas activas`} style={sx((movil ? 'width:max(100%,640px)' : 'width:100%') + ';height:auto;display:block;background:#F7F9FB')}>
             <defs><pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#F3F5F8" strokeWidth="1"></path></pattern></defs>
             <rect width="900" height="560" fill="url(#g)"></rect>
             <path d="M560 120L480 250L450 320L500 370L560 390L660 370M300 330L390 290L450 320M480 250L390 290M500 370L470 380L300 330M500 370L520 345L560 120" fill="none" stroke="#D5DBE3" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"></path>
@@ -242,6 +248,7 @@ export default function Monitoreo() {
             <path d="M372 494H400" stroke="#F0605D" strokeWidth="3" strokeDasharray="6 5"></path><text x="408" y="499" className="city" style={sx('fill:#3E4A59')}>Desvío</text>
             <text x="372" y="525" className="city" style={sx("fill:#3E4A59")}>{unidades.length} unidades en mapa</text>
           </svg>
+          </div>
         </section>
 
         <aside style={sx('flex:1 1 320px;display:flex;flex-direction:column;gap:16px;min-width:0')}>
@@ -348,7 +355,7 @@ export default function Monitoreo() {
           <>
             <div style={sx('display:flex;justify-content:space-between;gap:8px;align-items:center')}><span className={modal.e.cls}>{modal.e.src}</span><span className="mono" style={sx('font-size:13px;color:#5F6B7A')}>{modal.e.t}</span></div>
             <span style={sx('font-weight:600;font-size:16px')}>{modal.e.text}</span>
-            <div style={sx('display:grid;grid-template-columns:140px 1fr;gap:6px 12px;font-size:14px')}>
+            <div style={sx('display:grid;grid-template-columns:' + (movil ? '96px minmax(0,1fr)' : '140px 1fr') + ';gap:6px 12px;font-size:14px')}>
               <span className="lbl">Unidad</span><span className="mono">{modal.e.unidad}</span>
               <span className="lbl">Fuente</span><span>{modal.e.src} · normalizado por el adaptador de telemetría</span>
               {modal.e.velocidad !== undefined && <><span className="lbl">Velocidad</span><span className="mono">{modal.e.velocidad} km/h</span></>}

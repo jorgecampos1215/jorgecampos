@@ -6,6 +6,7 @@ import { Nota, PageHeader, Section } from '../components/Page'
 import { ROUTES } from '../lib/routes'
 import { actions, useStore, type Lead } from '../lib/store'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { AUTOPARTES, fmtM, todosLosClientes, type ClienteCRM } from '../data/crm'
 
 const CSS = `
@@ -26,6 +27,8 @@ a{color:#3448A8}a:hover{color:#0D1D41}
 .op-card:hover{border-color:#C7D0F2}
 .op-row:hover td{background:#FAFBFC}
 button.pill{border:0;cursor:pointer;font-family:'Montserrat',sans-serif}
+/* Celular: los botones ‹ › de etapa crecen a tamaño táctil (global.css les pone min-height 44px) */
+@media (max-width:719px){.mv{width:36px;height:36px;min-height:36px;font-size:16px}}
 `
 
 type Etapa = Lead['etapa']
@@ -60,6 +63,8 @@ const altaVacia = (empresa = '') => ({ nombre: empresa, sector: 'Alimentos y beb
 export default function Oportunidades() {
   const toast = useToast()
   const navigate = useNavigate()
+  // Celular: el pipeline se recorre con scroll horizontal (una etapa por pantalla) y la tabla se muestra como tarjetas.
+  const movil = useViewport() === 'movil'
   const leadsStore = useStore(s => s.leads ?? [])
   const nuevos = useStore(s => s.clientesNuevos ?? [])
   const clientes = useMemo(() => [...todosLosClientes(nuevos), AUTOPARTES], [nuevos])
@@ -152,6 +157,8 @@ export default function Oportunidades() {
 
   const top = [...abiertas].sort((a, b) => b.prob - a.prob).slice(0, 5)
   const cotizarA = (d: Deal) => ROUTES.Cotizador + '?cliente=' + encodeURIComponent(d.name)
+  /** Acción de la última columna de la tabla (la comparten la fila de escritorio y la tarjeta de celular). */
+  const accionDe = (d: Deal) => d.etapa !== 'Ganado' ? <Link className="btn btn-sm" to={cotizarA(d)}>Cotizar</Link> : !esCliente(d.name) ? <button type="button" className="btn btn-sm" onClick={() => { setAlta(altaVacia(d.name)); setGanado(d) }}>Dar de alta</button> : <Link className="btn btn-sm" to={ROUTES.CRM}>Ver cliente</Link>
 
   return (
     <Shell active="oportunidades" css={CSS}>
@@ -188,10 +195,11 @@ export default function Oportunidades() {
       </div>
 
       <Section titulo="Pipeline por etapa" ayuda="Cada tarjeta es una oportunidad. Usa ‹ › para regresar o avanzar de etapa; al llegar a Ganado te proponemos darla de alta como cliente.">
-        <div style={sx('overflow-x:auto')}>
-          <div style={sx('display:grid;grid-template-columns:repeat(5,minmax(196px,1fr));gap:10px;min-width:1020px')}>
+        {/* Celular: 5 columnas de ~una pantalla cada una con scroll horizontal y ajuste por etapa (la siguiente asoma a la derecha) */}
+        <div style={sx(movil ? 'overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding-bottom:4px' : 'overflow-x:auto')}>
+          <div style={sx(movil ? 'display:grid;grid-template-columns:repeat(5,min(300px,84vw));gap:10px;--sx-fijo:1' : 'display:grid;grid-template-columns:repeat(5,minmax(196px,1fr));gap:10px;min-width:1020px')}>
             {ETAPAS.map((e, ei) => (
-              <div key={e} style={sx('background:#F3F5F8;border:1px solid #E4E8ED;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px')}>
+              <div key={e} style={sx('background:#F3F5F8;border:1px solid #E4E8ED;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px' + (movil ? ';scroll-snap-align:start' : ''))}>
                 <div style={sx('display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap')}><span style={sx('font-weight:600;font-size:14px;white-space:nowrap')}>{ei + 1}. {e}</span><span className="mono" style={sx('font-size:13px;color:#5F6B7A')}>{allDeals.filter(d => d.etapa === e).length} · {fmtM(totalEtapa(e))}</span></div>
                 {allDeals.filter(d => d.etapa === e).map(d => (
                   <article key={d.id} className="op-card" aria-label={`${d.name}: ${d.what}`}>
@@ -221,15 +229,29 @@ export default function Oportunidades() {
             ))}
           </div>
         </div>
-        <Nota>Monto: valor mensual estimado en MXN. Probabilidad: estimación de la IA según la etapa, la actividad del cliente y el historial de cierres parecidos.</Nota>
+        <Nota>{movil ? 'Desliza a los lados para ver las 5 etapas. ' : ''}Monto: valor mensual estimado en MXN. Probabilidad: estimación de la IA según la etapa, la actividad del cliente y el historial de cierres parecidos.</Nota>
       </Section>
 
       <Section titulo="Todas las oportunidades" ayuda={`${allDeals.length} oportunidades en total. Filtra por etapa o responsable; haz clic en “Cotizar” para armar la propuesta.`} plegable abierto={false} style="padding:20px 8px 12px"
         acciones={<>
-          <input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar empresa…" aria-label="Buscar oportunidad" style={sx(inputStyle + ';width:180px;min-height:34px')} />
-          <select aria-label="Filtrar por etapa" value={fEtapa} onChange={e => setFEtapa(e.target.value as 'todas' | Etapa)} style={sx(inputStyle + ';width:auto;min-height:34px')}><option value="todas">Todas las etapas</option>{ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}</select>
-          <select aria-label="Filtrar por responsable" value={fResp} onChange={e => setFResp(e.target.value)} style={sx(inputStyle + ';width:auto;min-height:34px')}><option value="todos">Todos los responsables</option>{RESPONSABLES.map(r => <option key={r} value={r}>{r}</option>)}</select>
+          <input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar empresa…" aria-label="Buscar oportunidad" style={sx(inputStyle + (movil ? ';width:100%' : ';width:180px') + ';min-height:34px')} />
+          <select aria-label="Filtrar por etapa" value={fEtapa} onChange={e => setFEtapa(e.target.value as 'todas' | Etapa)} style={sx(inputStyle + (movil ? ';flex:1 1 140px;width:auto' : ';width:auto') + ';min-height:34px')}><option value="todas">Todas las etapas</option>{ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}</select>
+          <select aria-label="Filtrar por responsable" value={fResp} onChange={e => setFResp(e.target.value)} style={sx(inputStyle + (movil ? ';flex:1 1 140px;width:auto' : ';width:auto') + ';min-height:34px')}><option value="todos">Todos los responsables</option>{RESPONSABLES.map(r => <option key={r} value={r}>{r}</option>)}</select>
         </>}>
+        {movil ? (
+          // Celular: una tarjeta por oportunidad con los mismos datos que la fila
+          <div style={sx('display:flex;flex-direction:column;gap:8px;padding:0 6px')}>
+            {rows.slice(pg.from, pg.to).map(d => (
+              <article key={d.id} className="op-card" aria-label={`${d.name}: ${d.what}`}>
+                <div style={sx('display:flex;justify-content:space-between;gap:8px;align-items:flex-start')}><span style={sx('font-weight:600;font-size:14px;line-height:1.3')}>{d.name}{esCliente(d.name) && <span className="pill p-info" style={sx('margin-left:6px;vertical-align:middle')}>cliente</span>}</span><span className="mono" style={sx('font-size:14px;font-weight:500;flex:none')}>{d.amt}</span></div>
+                <span style={sx('font-size:13px;color:#3E4A59')}>{d.what}</span>
+                <div style={sx('display:flex;gap:6px;flex-wrap:wrap;align-items:center')}><span className={'pill ' + (d.etapa === 'Ganado' ? 'p-ok' : 'p-mute')} style={sx(d.etapa !== 'Ganado' ? PILL_ON : '')}>{ETAPAS.indexOf(d.etapa) + 1}. {d.etapa}</span><span className={d.cls}>{d.next}</span><span className="mono" style={sx('font-size:12px;color:#5F6B7A')} title="Probabilidad de cierre">{d.prob}%</span></div>
+                <div style={sx('display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;color:#5F6B7A;border-top:1px solid #EEF1F4;padding-top:6px')}><span title="Responsable">{d.resp}</span>{accionDe(d)}</div>
+              </article>
+            ))}
+            {rows.length === 0 && <span style={sx('padding:12px 6px;color:#5F6B7A;text-align:center;font-size:14px')}>Ninguna oportunidad coincide con el filtro. Prueba con otra empresa o quita el filtro.</span>}
+          </div>
+        ) : (
         <div style={sx('overflow-x:auto')}>
           <table style={sx('width:100%;border-collapse:collapse;font-size:14px')}>
             <thead><tr>
@@ -245,13 +267,14 @@ export default function Oportunidades() {
                   <td className="mono" style={sx(td + ';text-align:right')}>{d.prob}%</td>
                   <td style={sx(td)}><span className={d.cls}>{d.next}</span></td>
                   <td style={sx(td + ';color:#3E4A59')}>{d.resp}</td>
-                  <td style={sx(td + ';text-align:right')}>{d.etapa !== 'Ganado' ? <Link className="btn btn-sm" to={cotizarA(d)}>Cotizar</Link> : !esCliente(d.name) ? <button type="button" className="btn btn-sm" onClick={() => { setAlta(altaVacia(d.name)); setGanado(d) }}>Dar de alta</button> : <Link className="btn btn-sm" to={ROUTES.CRM}>Ver cliente</Link>}</td>
+                  <td style={sx(td + ';text-align:right')}>{accionDe(d)}</td>
                 </tr>
               ))}
               {rows.length === 0 && <tr><td colSpan={8} style={sx('padding:20px 12px;color:#5F6B7A;text-align:center')}>Ninguna oportunidad coincide con el filtro. Prueba con otra empresa o quita el filtro.</td></tr>}
             </tbody>
           </table>
         </div>
+        )}
         <div style={sx('padding:0 12px')}><Pager {...pg} /></div>
       </Section>
 

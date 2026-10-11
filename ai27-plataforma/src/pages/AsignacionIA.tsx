@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Shell } from '../components/Shell'
 import { Nota, PageHeader, Pasos, Section } from '../components/Page'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { ROUTES } from '../lib/routes'
 import { actions, useStore, type DecisionIA } from '../lib/store'
 import { Modal, Field, inputStyle, btnStyle, btnPriStyle, useToast } from '../components/ui'
@@ -42,6 +43,10 @@ type Hueco = { key: string; zona: Zona; titulo: string; diff: number; cls: strin
 export default function AsignacionIA() {
   const navigate = useNavigate()
   const toast = useToast()
+  // Pantallas chicas: el bloque de puntaje/acciones de cada candidato pasa a fila completa y el panel lateral deja de ser sticky.
+  const modo = useViewport()
+  const movil = modo === 'movil'
+  const tablet = modo === 'tablet'
   const LIST = useMemo(() => candidatos(), [])
   const resumen = useMemo(() => resumenEvaluacion(), [])
   const riesgo = useMemo(() => riesgoRuta(), [])
@@ -200,9 +205,9 @@ export default function AsignacionIA() {
                     )}
                     <button type="button" className="lnk" onClick={() => setDetalle(x => ({ ...x, [c.id]: !abierto }))}>{abierto ? 'Ocultar detalle' : 'Ver por qué'}</button>
                   </div>
-                  <div style={sx('display:flex;flex-direction:column;align-items:flex-end;gap:8px')}>
-                    <span style={sx('display:flex;flex-direction:column;align-items:flex-end')}><span style={sx("font-family:'Montserrat',sans-serif;font-size:28px;font-weight:700;line-height:1")} title="Promedio de cercanía, descanso, experiencia y desempeño">{c.score}</span><span style={sx('font-size:11px;color:#5F6B7A')}>puntos de 100</span></span>
-                    <div style={sx('display:flex;gap:8px')}>
+                  <div style={sx(movil ? 'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;width:100%' : 'display:flex;flex-direction:column;align-items:flex-end;gap:8px')}>
+                    <span style={sx(movil ? 'display:flex;align-items:baseline;gap:6px' : 'display:flex;flex-direction:column;align-items:flex-end')}><span style={sx("font-family:'Montserrat',sans-serif;font-size:28px;font-weight:700;line-height:1")} title="Promedio de cercanía, descanso, experiencia y desempeño">{c.score}</span><span style={sx('font-size:11px;color:#5F6B7A')}>puntos de 100</span></span>
+                    <div style={sx('display:flex;gap:8px;flex-wrap:wrap')}>
                       <button type="button" className={'btn' + (d === 'Asignado' ? ' btn-ok' : '')} aria-pressed={d === 'Asignado'} onClick={() => set(c, 'Asignado')}>{d === 'Asignado' ? 'Asignado ✓' : 'Asignar'}</button>
                       <button type="button" className="btn" aria-pressed={d === 'Descartado'} onClick={() => set(c, 'Descartado')}>Descartar</button>
                     </div>
@@ -219,7 +224,9 @@ export default function AsignacionIA() {
         </section>
 
         {/* Unidad sugerida + avance */}
-        <aside style={sx('flex:1 1 300px;max-width:380px;display:flex;flex-direction:column;gap:14px;position:sticky;top:20px')}>
+        <aside style={sx(movil ? 'flex:1 1 300px;display:flex;flex-direction:column;gap:14px'
+          : tablet ? 'flex:1 1 300px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start'
+          : 'flex:1 1 300px;max-width:380px;display:flex;flex-direction:column;gap:14px;position:sticky;top:20px')}>
           <Section titulo="Unidad sugerida" ayuda="El vehículo de AI27 que acompaña el viaje." style="padding:16px 18px;gap:10px">
             <span style={sx('font-weight:600;font-size:15px')}>{unidad ? `${unidad.id} · ${unidad.vehiculo}` : 'Sin unidades disponibles'}</span>
             <span style={sx('font-size:13px;color:#5F6B7A')}>{unidad?.id === 'AU-2087' ? 'En Tepotzotlán, a 6 km del origen · seguro y verificación vigentes · 4,200 km de uso' : unidad ? `${unidad.zona} · ${unidad.placas} · GPS ${unidad.gps} · póliza ${unidad.poliza} · ${unidad.km.toLocaleString('es-MX')} km` : ''}</span>
@@ -267,7 +274,7 @@ export default function AsignacionIA() {
         ) : undefined}>
         {modal && modal !== 'unidad' && modal.cob && (
           <>
-            <div style={sx('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px')}>
+            <div style={sx('display:grid;grid-template-columns:' + (movil ? 'repeat(auto-fit,minmax(min(80px,100%),1fr))' : 'repeat(3,minmax(0,1fr))') + ';gap:12px')}>
               <Field label="Disponibles"><span className="mono" style={sx(inputStyle + ';display:flex;align-items:center')}>{modal.cob.disponibles}</span></Field>
               <Field label="Requeridos"><span className="mono" style={sx(inputStyle + ';display:flex;align-items:center')}>{modal.cob.requeridos}</span></Field>
               <Field label="Diferencia"><span className="mono" style={sx(inputStyle + ';display:flex;align-items:center;color:' + (modal.diff < 0 ? '#B42318' : '#17784A'))}>{modal.diff > 0 ? '+' : ''}{modal.diff}</span></Field>

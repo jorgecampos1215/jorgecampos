@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Shell } from '../components/Shell'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { Field, Modal, btnPriStyle, btnStyle, inputStyle, useToast } from '../components/ui'
 import { Nota, PageHeader, Section } from '../components/Page'
 import { usuarios as USUARIOS_SEED, type Usuario } from '../data/usuarios'
@@ -24,6 +25,8 @@ a{color:#3448A8}a:hover{color:#0D1D41}
 .th-act{text-align:center;cursor:pointer}
 .th-act:hover{color:#0D1D41}
 .th-act small{display:block;text-transform:none;letter-spacing:0;font-size:11px;color:#8A95A3;font-weight:400;margin-top:2px}
+/* Celular: la tabla de permisos (pantalla + 4 casillas) cabe en 390px con celdas más angostas que las de global.css */
+@media (max-width:719px){.tbl-permisos th,.tbl-permisos td{padding-left:4px !important;padding-right:4px !important}}
 `
 
 const SR = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)'
@@ -91,6 +94,10 @@ function diff(saved: Perms, cur: Perms, savedScope: Record<string, Scope>, curSc
 
 export default function Usuarios() {
   const toast = useToast()
+  // Tablet y celular: la tabla de permisos cabe sin scroll (encabezados cortos, leyenda aparte); en celular la bitácora y la lista de usuarios se apilan.
+  const modo = useViewport()
+  const compacto = modo !== 'escritorio'
+  const movil = modo === 'movil'
   const [role, setRole] = useState('Monitorista')
   const [perms, setPerms] = useState<Perms>(INITIAL)
   const [saved, setSaved] = useState<Perms>(INITIAL)
@@ -202,19 +209,21 @@ export default function Usuarios() {
             acciones={<button type="button" className="btn btn-sm" onClick={() => { setUQ(''); setModal('usuarios') }}>Ver {counts[role]} {counts[role] === 1 ? 'usuario' : 'usuarios'}</button>}>
             <Nota>Marca una casilla para dar el permiso y desmárcala para quitarlo. Haz clic en el nombre de una pantalla para marcar toda la fila, o en un encabezado para marcar toda la columna. Después, guarda.</Nota>
             <div style={sx('overflow-x:auto')}>
-              <table className="tbl">
-                <thead><tr><th>Pantalla</th>{ACTS.map((a, j) => <th key={a} className="th-act" title={`Marcar/desmarcar “${a}” en todas las pantallas`} onClick={() => { const all = perms[role].every(r => r[j]); const p = { ...perms, [role]: perms[role].map(r => { const c = r.slice(); c[j] = !all; return c }) }; setPerms(p) }}>{a}<small>{ACT_HELP[a]}</small></th>)}</tr></thead>
+              <table className="tbl tbl-permisos">
+                <thead><tr><th>Pantalla</th>{ACTS.map((a, j) => <th key={a} className="th-act" title={`Marcar/desmarcar “${a}” en todas las pantallas`} style={sx(movil ? 'font-size:11px;letter-spacing:0' : '')} onClick={() => { const all = perms[role].every(r => r[j]); const p = { ...perms, [role]: perms[role].map(r => { const c = r.slice(); c[j] = !all; return c }) }; setPerms(p) }}>{a}{!compacto && <small>{ACT_HELP[a]}</small>}</th>)}</tr></thead>
                 <tbody>
                   {MODS.map((mod, i) => (
-                    <tr key={mod}><td style={sx('cursor:pointer')} title="Marcar/desmarcar toda la fila" onClick={() => { const all = perms[role][i].every(Boolean); const p = { ...perms, [role]: perms[role].map((r, k) => (k === i ? r.map(() => !all) : r)) }; setPerms(p) }}>{MOD_LABEL[mod] ?? mod}</td>
+                    <tr key={mod}><td style={sx('cursor:pointer' + (movil ? ';white-space:normal' : ''))} title="Marcar/desmarcar toda la fila" onClick={() => { const all = perms[role][i].every(Boolean); const p = { ...perms, [role]: perms[role].map((r, k) => (k === i ? r.map(() => !all) : r)) }; setPerms(p) }}>{MOD_LABEL[mod] ?? mod}</td>
                       {ACTS.map((a, j) => (
-                        <td key={a} style={sx('text-align:center')}><label style={sx('display:inline-flex;min-width:44px;min-height:36px;align-items:center;justify-content:center;cursor:pointer')}><span style={sx(SR)}>{a + ' ' + mod}</span><input type="checkbox" checked={perms[role][i][j]} onChange={() => toggle(i, j)} style={sx('width:18px;height:18px;accent-color:#475CC7')} /></label></td>
+                        <td key={a} style={sx('text-align:center')}><label style={sx(`display:inline-flex;min-width:${movil ? 36 : 44}px;min-height:36px;align-items:center;justify-content:center;cursor:pointer`)}><span style={sx(SR)}>{a + ' ' + mod}</span><input type="checkbox" checked={perms[role][i][j]} onChange={() => toggle(i, j)} style={sx('width:18px;height:18px;accent-color:#475CC7')} /></label></td>
                       ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {/* En pantallas chicas la ayuda de cada columna sale del encabezado (para que la tabla quepa) y se muestra aquí */}
+            {compacto && <Nota>{ACTS.map(a => `${a}: ${ACT_HELP[a]}`).join(' · ')}</Nota>}
           </Section>
 
           <Section titulo="Alcance del rol" ayuda="Hasta dónde llega lo que ve: solo su zona, solo sus clientes o toda la empresa." plegable abierto={false}>
@@ -232,7 +241,13 @@ export default function Usuarios() {
           <label style={sx('display:flex')}><span style={sx(SR)}>Filtrar por quién</span><select style={sx(SEL + ';min-height:34px')} value={fActor} onChange={e => setFActor(e.target.value)}>{actores.map(a => <option key={a}>{a}</option>)}</select></label>
           <button type="button" className="btn btn-sm" onClick={exportar}>Exportar CSV</button></>}>
         {auditView.length === 0 && <span style={sx('font-size:14px;color:#5F6B7A;padding:8px 0;border-top:1px solid #EEF1F4')}>Sin eventos para ese filtro. Prueba con otra palabra o quita el filtro de quién.</span>}
-        {auditView.map((a, k) => (
+        {auditView.map((a, k) => movil ? (
+          /* Celular: fecha y quién en un renglón, el qué debajo (la rejilla de 3 columnas no cabe) */
+          <div key={a.t + a.what + k} style={sx('display:flex;flex-direction:column;gap:2px;padding:8px 0;border-top:1px solid #EEF1F4;font-size:14px')}>
+            <span style={sx('display:flex;gap:10px;flex-wrap:wrap;align-items:baseline')}><span className="mono" style={sx('color:#5F6B7A;font-size:13px')}>{a.t}</span><span>{a.who}</span></span>
+            <span style={sx('color:#3E4A59')}>{a.what}</span>
+          </div>
+        ) : (
           <div key={a.t + a.what + k} style={sx('display:grid;grid-template-columns:140px 180px minmax(0,1fr);gap:12px;padding:8px 0;border-top:1px solid #EEF1F4;font-size:14px')}>
             <span className="mono" style={sx('color:#5F6B7A;font-size:13px')}>{a.t}</span><span>{a.who}</span><span style={sx('color:#3E4A59')}>{a.what}</span>
           </div>
@@ -259,6 +274,23 @@ export default function Usuarios() {
 
       <Modal open={modal === 'usuarios'} onClose={() => setModal(null)} title={`Usuarios con rol ${role}`} width={720} footer={<><button type="button" style={sx(btnStyle)} onClick={() => { setModal(null); abrirInvitar() }}>Invitar usuario</button><button type="button" style={sx(btnPriStyle)} onClick={() => setModal(null)}>Listo</button></>}>
         <label style={sx('display:flex')}><span style={sx(SR)}>Buscar usuario</span><input type="search" placeholder="Buscar por nombre, correo o zona" value={uQ} onChange={e => setUQ(e.target.value)} style={sx(inputStyle)} /></label>
+        {movil ? (
+          /* Celular: una tarjeta por usuario con los mismos datos que la tabla */
+          <div style={sx('display:flex;flex-direction:column')}>
+            {usersRol.map(u => (
+              <div key={u.id} style={sx('display:flex;flex-direction:column;gap:6px;padding:12px 0;border-top:1px solid #EEF1F4;font-size:14px')}>
+                <span style={sx('display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap')}>
+                  <span style={sx('display:flex;gap:8px;align-items:center;font-weight:500')}><span style={sx('width:28px;height:28px;border-radius:50%;background:#6A5ACD;color:#FFFFFF;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex:none')}>{ini(u.nombre)}</span>{u.nombre}</span>
+                  <span className={'pill ' + (u.estatus === 'Activo' ? 'p-ok' : u.estatus === 'Invitado' ? 'p-info' : 'p-mute')}>{u.estatus}</span>
+                </span>
+                <span className="mono" style={sx('font-size:13px;overflow-wrap:anywhere')}>{u.correo}</span>
+                <span style={sx('font-size:13px;color:#5F6B7A')}>{u.zona} · Último acceso: <span className="mono">{u.ultimoAcceso}</span></span>
+                <span style={sx('display:flex;gap:6px;flex-wrap:wrap')}>{u.estatus === 'Invitado' && <button type="button" className="btn btn-sm" onClick={() => reenviar(u)}>Reenviar</button>}<button type="button" className="btn btn-sm" onClick={() => toggleUser(u)}>{u.estatus === 'Inactivo' ? 'Reactivar' : 'Desactivar'}</button></span>
+              </div>
+            ))}
+            {usersRol.length === 0 && <span style={sx('color:#5F6B7A;font-size:14px;padding:8px 0;border-top:1px solid #EEF1F4')}>Sin usuarios con ese criterio. Prueba con otro nombre o invita a alguien nuevo.</span>}
+          </div>
+        ) : (
         <div style={sx('overflow-x:auto')}>
           <table className="tbl">
             <thead><tr><th>Usuario</th><th>Correo</th><th>Zona / cliente</th><th>Último acceso</th><th>Estatus</th><th></th></tr></thead>
@@ -275,6 +307,7 @@ export default function Usuarios() {
             </tbody>
           </table>
         </div>
+        )}
       </Modal>
     </Shell>
   )

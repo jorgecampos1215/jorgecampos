@@ -3,12 +3,14 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui'
 import { ROUTES } from '../lib/routes'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { custodios, servicios } from '../data/seed'
 import { ruta as rutaDe, tiempoTexto } from '../data/rutas'
 
 const CSS = `
 a{color:#3448A8}a:hover{color:#0D1D41}
-@media (max-width:430px){.cm-wrap{padding:0!important;align-items:flex-start!important;background:#F6F7F9!important}.cm-phone{width:100%!important;height:100vh!important;min-height:844px;border-radius:0!important;box-shadow:none!important}}
+/* Celular real (<720px): el teléfono deja de ser una maqueta de 390×844 y ocupa toda la pantalla; crece con su contenido (sin recortar) y la página hace scroll. */
+@media (max-width:719px){.cm-wrap{padding:0!important;align-items:flex-start!important;background:#F6F7F9!important}.cm-phone{width:100%!important;height:auto!important;min-height:100vh;border-radius:0!important;box-shadow:none!important;padding-top:24px!important}}
 @keyframes ai27-panic-pulse{0%,100%{box-shadow:0 0 0 0 rgba(201,48,44,.55)}50%{box-shadow:0 0 0 14px rgba(201,48,44,0)}}
 @keyframes ai27-ring{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 .cm-sm{min-height:44px;border-radius:10px;border:1px solid #D5DBE3;background:#F3F5F8;color:#0D1D41;font:600 14px 'Montserrat',sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 12px;text-decoration:none}
@@ -34,11 +36,13 @@ type Entrada = { hora: string; txt: string; tipo: 'ok' | 'warn' | 'bad' | 'info'
 type Sheet = 'menu' | 'ruta' | 'llamada' | 'historial' | 'turno' | 'docs' | null
 
 function Hoja({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  // Celular real: la hoja se fija a la pantalla (el teléfono ya no es una maqueta de alto fijo y puede estar desplazado).
+  const movil = useViewport() === 'movil'
   return (
-    <div role="dialog" aria-modal="true" aria-label={title} onClick={onClose} style={sx('position:absolute;inset:0;background:rgba(18,24,33,.38);display:flex;align-items:flex-end;z-index:5;border-radius:inherit')}>
-      <div onClick={e => e.stopPropagation()} style={sx('background:#FFFFFF;border-radius:20px 20px 0 0;padding:14px 18px 28px;width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;max-height:78%;overflow:auto;box-shadow:0 -8px 30px rgba(18,24,33,.18)')}>
+    <div role="dialog" aria-modal="true" aria-label={title} onClick={onClose} style={sx((movil ? 'position:fixed' : 'position:absolute') + ';inset:0;background:rgba(18,24,33,.38);display:flex;align-items:flex-end;z-index:5;border-radius:inherit')}>
+      <div onClick={e => e.stopPropagation()} style={sx('background:#FFFFFF;border-radius:20px 20px 0 0;padding:14px 18px 28px;width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;max-height:' + (movil ? '88%' : '78%') + ';overflow:auto;box-shadow:0 -8px 30px rgba(18,24,33,.18)')}>
         <span aria-hidden="true" style={sx('width:40px;height:4px;border-radius:2px;background:#D5DBE3;align-self:center')}></span>
-        <div style={sx('display:flex;justify-content:space-between;align-items:center;gap:8px')}><span style={sx("font-family:'Montserrat',sans-serif;font-size:18px;font-weight:600")}>{title}</span><button type="button" onClick={onClose} aria-label="Cerrar" style={sx('width:32px;height:32px;border-radius:8px;border:1px solid #D5DBE3;background:#F3F5F8;color:#3E4A59;font-size:16px;cursor:pointer')}>×</button></div>
+        <div style={sx('display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:nowrap')}><span style={sx("font-family:'Montserrat',sans-serif;font-size:18px;font-weight:600")}>{title}</span><button type="button" onClick={onClose} aria-label="Cerrar" style={sx((movil ? 'width:40px;height:40px;min-height:40px;flex:none' : 'width:32px;height:32px') + ';border-radius:8px;border:1px solid #D5DBE3;background:#F3F5F8;color:#3E4A59;font-size:16px;cursor:pointer')}>×</button></div>
         {children}
       </div>
     </div>
@@ -137,7 +141,8 @@ export default function CustodioMovil() {
         <section style={sx('background:#FFFFFF;border:1px solid #E4E8ED;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px')}>
           <span style={sx('font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5F6B7A')}>{SERVICIO.id} · {SERVICIO.cliente}</span>
           <span style={sx('font-weight:600;font-size:17px')}>{SERVICIO.origen} → {SERVICIO.destino}</span>
-          <div style={sx('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-size:13px')}>
+          {/* --sx-fijo: la app del custodio ya está diseñada para 390px; sus rejillas no deben colapsar en celular */}
+          <div style={sx('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-size:13px;--sx-fijo:1')}>
             <div style={sx('display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Tráiler</span><span style={sx("font-family:'IBM Plex Mono',monospace")}>{SERVICIO.trailer}</span></div>
             <div style={sx('display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Unidad</span><span style={sx("font-family:'IBM Plex Mono',monospace")}>{SERVICIO.unidad}</span></div>
             <div style={sx('display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Tráiler a</span><span style={sx("font-family:'IBM Plex Mono',monospace")}>120 m</span></div>
@@ -149,7 +154,7 @@ export default function CustodioMovil() {
           </div>
         </section>
 
-        <section aria-label="Registro" style={sx('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px')}>
+        <section aria-label="Registro" style={sx('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;--sx-fijo:1')}>
           {ACTS.map(([label, what]) => (
             <button key={label} type="button" onClick={() => { const t = now(); setLast('Registrado: ' + what + ' a las ' + t + '. Monitoreo ya lo vio.'); registrar(`${label}: ${what} · avisado a monitoreo`); toast(`Listo: ${what} a las ${t}`) }} style={sx(base)}>{label}</button>
           ))}
@@ -211,7 +216,7 @@ export default function CustodioMovil() {
         )}
         {sheet === 'ruta' && (
           <Hoja title={`Mi ruta · ${SERVICIO.origen} → ${SERVICIO.destino}`} onClose={() => setSheet(null)}>
-            <div style={sx('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;font-size:13px')}>
+            <div style={sx('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;font-size:13px;--sx-fijo:1')}>
               <div style={sx('background:#F3F5F8;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Distancia</span><span style={sx("font-family:'IBM Plex Mono',monospace")}>{RUTA.km} km</span></div>
               <div style={sx('background:#F3F5F8;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Tiempo</span><span style={sx("font-family:'IBM Plex Mono',monospace")}>{tiempoTexto(RUTA.minutos)}</span></div>
               <div style={sx('background:#F3F5F8;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Casetas</span><span style={sx("font-family:'IBM Plex Mono',monospace")}>{RUTA.casetas}</span></div>
@@ -265,14 +270,14 @@ export default function CustodioMovil() {
         {sheet === 'turno' && (
           <Hoja title="Mi próximo turno" onClose={() => setSheet(null)}>
             <span style={sx('font-weight:600;font-size:16px')}>Jueves 8 oct · 06:00 · Alpura Cuautitlán</span>
-            <div style={sx('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-size:13px')}>
+            <div style={sx('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-size:13px;--sx-fijo:1')}>
               <div style={sx('display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Servicio</span><span style={sx("font-family:'IBM Plex Mono',monospace")}>SRV-24817</span></div>
               <div style={sx('display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Ruta</span><span>Cuautitlán → Guadalajara</span></div>
               <div style={sx('display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Compañero</span><span>E. Villa · C-1188</span></div>
               <div style={sx('display:flex;flex-direction:column;gap:2px')}><span style={sx('color:#5F6B7A')}>Unidad</span><span style={sx("font-family:'IBM Plex Mono',monospace")}>AU-3321 · NTR-482-B</span></div>
             </div>
             <span style={sx('font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5F6B7A;margin-top:4px')}>Mi semana · {YO.horasSemana} h</span>
-            <div style={sx('display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px')}>
+            <div style={sx('display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;--sx-fijo:1')}>
               {YO.turnos.split('').map((t, i) => (
                 <div key={i} style={sx('display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:#5F6B7A')}><span>{DIAS[i]}</span><span title={t === 's' ? 'Servicio' : t === 'd' ? 'Descanso' : 'Libre'} style={sx('width:100%;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-weight:600;' + (t === 's' ? 'background:#E9EDFB;color:#0D1D41' : t === 'd' ? 'background:#E3F2F8;color:#0B6A8A' : 'background:#EEF1F4;color:#4A5868'))}>{t === 's' ? 'S' : t === 'd' ? 'D' : 'L'}</span></div>
               ))}

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Shell } from '../components/Shell'
 import { PageHeader, Section, Nota } from '../components/Page'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { ROUTES } from '../lib/routes'
 import { useToast } from '../components/ui'
 import { CLIENTES, ZONAS } from '../data/seed'
@@ -82,6 +83,10 @@ export default function Main() {
   const navigate = useNavigate()
   const toast = useToast()
   const pins = usePins()
+  const modo = useViewport()
+  const movil = modo === 'movil'
+  // Mini indicadores (Seguridad, Comercial): en celular sx() dejaría la rejilla de 2 columnas en 1; con auto-fit caben 2 cifras por fila.
+  const rejillaMini = movil ? 'display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:12px' : 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px'
   const [f, setF] = useState<Filtros>(FILTROS_DEFAULT)
   const [masFiltros, setMasFiltros] = useState(false)
   const [masAlertas, setMasAlertas] = useState(false)
@@ -143,7 +148,7 @@ export default function Main() {
 
       <div style={sx('display:flex;flex-direction:column;gap:12px')}>
         <form style={sx('display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end')} onSubmit={e => e.preventDefault()}>
-          <h2 style={sx("margin:0 8px 0 0;font-family:'Montserrat',sans-serif;font-size:17px;font-weight:600;align-self:center")}>Cómo vamos</h2>
+          <h2 style={sx("margin:0 8px 0 0;font-family:'Montserrat',sans-serif;font-size:17px;font-weight:600;align-self:center" + (movil ? ';flex-basis:100%;margin:0' : ''))}>Cómo vamos</h2>
           <label className="field">Periodo<select value={f.periodo} onChange={upd('periodo')}>{PERIODOS.map(p => <option key={p} value={p}>{p}</option>)}</select></label>
           <label className="field">Zona<select value={f.zona} onChange={upd('zona')}>{ZONA_OPCIONES.map(z => <option key={z} value={z}>{z === 'Todas' ? 'Todas las zonas' : z}</option>)}</select></label>
           {masFiltros && <label className="field">Cliente<select value={f.cliente} onChange={upd('cliente')}><option value="Todos">Todos los clientes</option>{CLIENTES.map(c => <option key={c} value={c}>{c}</option>)}</select></label>}
@@ -201,7 +206,8 @@ export default function Main() {
 
         <Section titulo="Custodios disponibles por zona" ayuda="Cuántos puedes asignar ahora mismo en cada zona, de la plantilla total." acciones={hueco && <Link to={ROUTES.AsignacionIA} className="pill p-warn" style={sx('text-decoration:none')} title="Ver huecos de cobertura">Falta cubrir: Bajío mañana −6</Link>}>
           {zones.map(z => (
-            <Link key={z.name} to={ROUTES.Custodios} title={`Ver custodios de ${z.name}`} style={sx('display:grid;grid-template-columns:110px minmax(0,1fr) 92px;gap:12px;align-items:center;font-size:14px;color:inherit;text-decoration:none')}>
+            // Celular: columnas de nombre y cifra más angostas para que la barra conserve ancho legible.
+            <Link key={z.name} to={ROUTES.Custodios} title={`Ver custodios de ${z.name}`} style={sx('display:grid;grid-template-columns:' + (movil ? '88px minmax(0,1fr) 72px;gap:10px' : '110px minmax(0,1fr) 92px;gap:12px') + ';align-items:center;font-size:14px;color:inherit;text-decoration:none')}>
               <span>{z.name}</span>
               <div className="track" style={sx('height:10px')}><div style={sx(z.bar)}></div></div>
               <span className="mono" style={sx('text-align:right;color:#3E4A59')}>{z.avail} / {z.total}</span>
@@ -218,7 +224,7 @@ export default function Main() {
               <h3 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:15px;font-weight:600")}>Ingresos por tipo de servicio</h3>
               <span style={sx('font-size:13px;color:#5F6B7A')}>Millones de pesos por mes. Toca un color para filtrar por tipo.</span>
             </div>
-            <div style={sx('display:flex;gap:20px;align-items:flex-end;height:180px;padding-top:8px')}>
+            <div style={sx('display:flex;flex-wrap:nowrap;gap:20px;align-items:flex-end;height:180px;padding-top:8px' + (movil ? ';gap:12px' : ''))}>
               {months.map(m => (
                 <Link to={ROUTES.Finanzas} key={m.name} title={`Ver finanzas de ${m.name}`} style={sx('flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;color:inherit' + (m.enPeriodo || f.periodo === 'Octubre 2026' ? '' : ';opacity:.45'))}>
                   <span className="mono" style={sx('font-size:12px;color:#3E4A59')}>{m.total}</span>
@@ -243,7 +249,7 @@ export default function Main() {
               <h3 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:15px;font-weight:600")}>Seguridad y reacción</h3>
               <span style={sx('font-size:13px;color:#5F6B7A')}>Qué tan rápido llegamos y cuánto recuperamos cuando hay un incidente.</span>
             </div>
-            <div style={sx('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px')}>
+            <div style={sx(rejillaMini)}>
               <Mini to={ROUTES.Reaccion} label="Tiempo de reacción"><span className="kpi" style={sx('font-size:24px')}>{seg.reaccion} min</span></Mini>
               <Mini to={ROUTES.Reaccion} label="Recuperación"><span className="kpi" style={sx('font-size:24px')}>{seg.recuperacion}%</span></Mini>
               <Mini to={ROUTES.Reportes} label="Recuperado"><span className="kpi" style={sx('font-size:24px;color:#17784A')}>{fmtM(seg.recuperado)}</span></Mini>
@@ -261,7 +267,7 @@ export default function Main() {
               <h3 style={sx("margin:0;font-family:'Montserrat',sans-serif;font-size:15px;font-weight:600")}>Comercial y equipo</h3>
               <span style={sx('font-size:13px;color:#5F6B7A')}>Cómo va la venta, el cobro y la plantilla.</span>
             </div>
-            <div style={sx('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px')}>
+            <div style={sx(rejillaMini)}>
               <Mini to={ROUTES.Cotizador} label="Cotizaciones ganadas"><span className="kpi" style={sx('font-size:24px')}>{com.cierre}%</span></Mini>
               <Mini to={ROUTES.CRM} label="Clientes activos"><span className="kpi" style={sx('font-size:24px')}>{com.clientesActivos}</span></Mini>
               <Mini to={ROUTES.Finanzas} label="Peso de los 5 mayores"><span className="kpi" style={sx('font-size:24px')}>{com.top5}%</span></Mini>
@@ -282,7 +288,8 @@ export default function Main() {
               <div key={p.key} style={sx('background:#F3F5F8;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px')}>
                 <span className="lbl">{p.q}</span>
                 <span style={sx('font-size:14px;line-height:1.5')}>{p.a}</span>
-                <div style={sx('display:flex;gap:12px;font-size:13px')}>
+                {/* Celular: los botones miden 44px de alto (global.css); se centran para que «Quitar» quede a la altura de «Abrir». */}
+                <div style={sx('display:flex;gap:12px;font-size:13px' + (movil ? ';align-items:center' : ''))}>
                   <Link to={p.to}>Abrir</Link>
                   <button type="button" className="lnk" onClick={() => { togglePin(p); toast('Respuesta quitada de Inicio', 'info') }}>Quitar</button>
                 </div>

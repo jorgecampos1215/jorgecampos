@@ -4,6 +4,7 @@ import { Shell } from '../components/Shell'
 import { Field, Modal, Pager, btnPriStyle, btnStyle, inputStyle, usePagination, useToast } from '../components/ui'
 import { Nota, PageHeader, Section } from '../components/Page'
 import { sx } from '../lib/sx'
+import { useViewport } from '../lib/viewport'
 import { ROUTES } from '../lib/routes'
 import { useStore } from '../lib/store'
 import { clientes } from '../data/seed'
@@ -54,6 +55,8 @@ const estatusPill = (f: Factura) => f.estatus === 'Cobrada' ? ['pill p-ok', 'Cob
 
 export default function Finanzas() {
   const toast = useToast()
+  // Celular: las filas de facturas y de gastos cambian a pistas angostas (la rejilla "90px 1fr 100px auto" dejaba el concepto en una letra).
+  const movil = useViewport() === 'movil'
   const nuevos = useStore(s => s.clientesNuevos ?? [])
   const [by, setBy] = useState<By>('cli')
   const [periodo, setPeriodo] = useState<Periodo>('Septiembre 2026')
@@ -172,9 +175,18 @@ export default function Finanzas() {
         <div style={sx('display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px')}>
           {bucket('Al corriente', b.corriente)}{bucket('1–30 días', b.d30)}{bucket('31–60 días', b.d60)}{bucket('Más de 60 días', b.mas60, true)}
         </div>
-        <div style={sx('display:grid;grid-template-columns:90px minmax(0,1fr) 100px auto;gap:10px;padding:4px 4px 0;font-size:12px;color:#5F6B7A')}><span>Factura</span><span>Concepto</span><span style={sx('text-align:right')}>Monto</span><span>Estatus</span></div>
+        {movil
+          ? <div style={sx('display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:4px 4px 0;font-size:12px;color:#5F6B7A;--sx-fijo:1')}><span>Factura · concepto</span><span style={sx('text-align:right')}>Monto · estatus</span></div>
+          : <div style={sx('display:grid;grid-template-columns:90px minmax(0,1fr) 100px auto;gap:10px;padding:4px 4px 0;font-size:12px;color:#5F6B7A')}><span>Factura</span><span>Concepto</span><span style={sx('text-align:right')}>Monto</span><span>Estatus</span></div>}
         {lista.map(i => {
           const [cls, txt] = estatusPill(i)
+          if (movil) return (
+            // Celular: folio y concepto a la izquierda, monto y estatus a la derecha
+            <div key={i.id} className={'inv' + (selInv === i.id ? ' sel' : '')} onClick={() => setSelInv(s => (s === i.id ? null : i.id))} title="Seleccionar para registrar pago o recordatorio" style={sx('display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid #EEF1F4;font-size:14px;--sx-fijo:1')}>
+              <span style={sx('display:flex;flex-direction:column;gap:2px;min-width:0')}><span className="mono" style={sx('font-size:12px;color:#5F6B7A')}>{i.id}</span><span style={sx('overflow:hidden;text-overflow:ellipsis;white-space:nowrap')}>{i.concepto}</span></span>
+              <span style={sx('display:flex;flex-direction:column;align-items:flex-end;gap:4px')}><span className="mono">{fmt(i.monto)}</span><span className={cls}>{txt}</span></span>
+            </div>
+          )
           return (
             <div key={i.id} className={'inv' + (selInv === i.id ? ' sel' : '')} onClick={() => setSelInv(s => (s === i.id ? null : i.id))} title="Seleccionar para registrar pago o recordatorio" style={sx('display:grid;grid-template-columns:90px minmax(0,1fr) 100px auto;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid #EEF1F4;font-size:14px')}>
               <span className="mono" style={sx('font-size:13px;color:#5F6B7A')}>{i.id}</span><span style={sx('overflow:hidden;text-overflow:ellipsis;white-space:nowrap')}>{i.concepto}</span><span className="mono" style={sx('text-align:right')}>{fmt(i.monto)}</span><span className={cls}>{txt}</span>
@@ -195,7 +207,7 @@ export default function Finanzas() {
         </div></>}>
         <div style={sx('overflow-x:auto')}>
           <table className="tbl">
-            <thead><tr><th onClick={() => toggleSort('n')}>{firstCol}{arrow('n')}</th><th onClick={() => toggleSort('rev')}>Ingresos{arrow('rev')}</th><th onClick={() => toggleSort('cost')}>Costo directo{arrow('cost')}</th><th onClick={() => toggleSort('m')}>Margen{arrow('m')}</th><th style={sx('min-width:200px')} onClick={() => toggleSort('pct')}>% margen{arrow('pct')}</th></tr></thead>
+            <thead><tr><th onClick={() => toggleSort('n')}>{firstCol}{arrow('n')}</th><th onClick={() => toggleSort('rev')}>Ingresos{arrow('rev')}</th><th onClick={() => toggleSort('cost')}>Costo directo{arrow('cost')}</th><th onClick={() => toggleSort('m')}>Margen{arrow('m')}</th><th style={sx(movil ? 'min-width:120px' : 'min-width:200px')} onClick={() => toggleSort('pct')}>% margen{arrow('pct')}</th></tr></thead>
             <tbody>
               {rows.slice(pg.from, pg.to).map(r => (
                 <tr key={r.n} title={r.detalle}><td>{r.n}{r.detalle && <span style={sx('display:block;font-size:12px;color:#5F6B7A;white-space:normal')}>{r.detalle}</span>}</td><td className="mono">{fmt(r.rev)}</td><td className="mono">{fmt(r.cost)}</td><td className="mono">{fmt(r.m)}</td>
@@ -211,7 +223,7 @@ export default function Finanzas() {
 
       <Section titulo="Gastos por categoría" ayuda={`En qué se va el dinero en ${ETIQUETA[periodo]}.`} plegable abierto={false}>
         {GASTOS.map(([k, v]) => (
-          <div key={k} style={sx('display:grid;grid-template-columns:150px minmax(0,1fr) 80px;gap:12px;align-items:center;font-size:14px')}>
+          <div key={k} style={sx('display:grid;grid-template-columns:' + (movil ? '104px minmax(0,1fr) 64px;gap:8px' : '150px minmax(0,1fr) 80px;gap:12px') + ';align-items:center;font-size:14px')}>
             <span>{k}</span><div style={sx('height:10px;border-radius:5px;background:#EBEEF2;overflow:hidden')}><div style={sx('height:100%;width:' + Math.round(v * f / gmax * 100) + '%;background:#3FA7C9')}></div></div><span className="mono" style={sx('text-align:right')}>{fmtM1(v * f)}</span>
           </div>
         ))}
